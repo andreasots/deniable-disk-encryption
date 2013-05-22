@@ -97,13 +97,17 @@ std::string OpenSSL::Hash::algo() const {
   return OBJ_nid2ln(EVP_MD_type(EVP_MD_CTX_md(_context)));
 }
 
+std::size_t OpenSSL::Hash::size() const {
+  return EVP_MD_CTX_size(_context);
+}
+
 void OpenSSL::Hash::update(const std::string& message) {
   if (!EVP_DigestUpdate(_context, message.data(), message.size()))
     throw std::runtime_error("EVP_DigestUpdate failed");
 }
 
 std::string OpenSSL::Hash::digest() {
-  unsigned char md[EVP_MD_CTX_size(_context)];
+  unsigned char md[size()];
   if (!EVP_DigestFinal_ex(_context, md, nullptr))
     throw std::runtime_error("EVP_DigestFinal failed");
   return std::string(reinterpret_cast<char*>(md), sizeof(md));

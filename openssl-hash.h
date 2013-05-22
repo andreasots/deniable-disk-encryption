@@ -18,6 +18,7 @@ class OpenSSL {
     Hash& operator=(Hash&&);
     void reset();
     std::string algo() const;
+    std::size_t size() const;
 
     void update(const std::string&);
     std::string digest();

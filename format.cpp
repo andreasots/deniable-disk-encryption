@@ -103,6 +103,8 @@ int main(int argc, char *argv[]) {
 
   key_size /= 8;
   auto iter = PBKDF2::benchmark(hash, iter_time);
+  iter /= (key_size + hash.size()-1)/hash.size();
+
   unsigned char salt[16];
   // Does it matter if the salt is from a Debian random number generator?
   if (RAND_bytes(salt, 16) != 1) {
