@@ -1,4 +1,5 @@
 #include "header.h"
+#include "getpass.h"
 #include <getopt.h>
 #include <iostream>
 #include <cstdlib>
@@ -42,8 +43,12 @@ int main(int argc, char *argv[]) {
     std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
     return 1;
   }
+
   Params params;
   params.load(argv[optind]);
+
+  std::cout << "Password: " << std::flush;
+  std::cout << getpass() << std::endl;
 
   return 0;
 }

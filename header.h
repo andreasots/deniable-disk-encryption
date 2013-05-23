@@ -8,6 +8,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <cstring>
 
 struct Params {
   std::size_t block_size, iters, key_size;
@@ -17,7 +18,11 @@ struct Params {
   void store(const std::string& devname) {
     std::ofstream device(devname);
     device.exceptions(std::ios::failbit | std::ios::badbit);
-    device.write(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR));
+    char buf[512];
+    std::memset(buf, 0, 512);
+    device.write(buf, 512);
+    device.seekp(0);
+    device.write(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR)-1);
     device.write(htole32_str(block_size).data(), 4);
     device.write(htole32_str(cipher.size()).data(), 4);
     device.write(cipher.data(), cipher.size());
@@ -34,9 +39,9 @@ struct Params {
     device.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
     device.read(buf, 512);
 
-    if (std::string(buf, sizeof(HEADER_MAGIC_STR)) != HEADER_MAGIC_STR)
+    if (std::string(buf, sizeof(HEADER_MAGIC_STR)-1) != HEADER_MAGIC_STR)
       throw std::runtime_error("Wrong magic number");
-    offset += sizeof(HEADER_MAGIC_STR);
+    offset += sizeof(HEADER_MAGIC_STR)-1;
 
     block_size = le32toh_str(std::string(buf+offset, 4));
     offset += 4;
