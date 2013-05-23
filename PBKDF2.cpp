@@ -2,9 +2,8 @@
 #include "util.h"
 #include <chrono>
 
-std::string PBKDF2::PBKDF2(OpenSSL::Hash& hash,
-    const std::string& password, const std::string& salt,
-    std::size_t iterations, std::size_t length) {
+std::string PBKDF2::PBKDF2(Hash& hash, const std::string& password, 
+    const std::string& salt, std::size_t iterations, std::size_t length) {
   std::string res;
 
   for (std::size_t i = 1; res.size() < length; i++)
@@ -13,9 +12,8 @@ std::string PBKDF2::PBKDF2(OpenSSL::Hash& hash,
   return res.substr(0, length);
 }
 
-std::string PBKDF2::F(OpenSSL::Hash& hash,
-    const std::string& password, const std::string& salt,
-    std::size_t iterations, std::size_t i) {
+std::string PBKDF2::F(Hash& hash, const std::string& password,
+    const std::string& salt, std::size_t iterations, std::size_t i) {
   hash.reset();
   hash.update(password+salt+htobe32_str(i));
   std::string res, U = hash.digest();
@@ -31,7 +29,7 @@ std::string PBKDF2::F(OpenSSL::Hash& hash,
   return res;
 }
 
-std::size_t PBKDF2::benchmark(OpenSSL::Hash& hash, std::size_t time) {
+std::size_t PBKDF2::benchmark(Hash& hash, std::size_t time) {
   const static std::string PASSWORD("password123");
   const static std::string SALT("0123456789ABCDEF");
   int i = 1;

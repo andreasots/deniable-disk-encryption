@@ -1,5 +1,5 @@
 #include "PBKDF2.h"
-#include "openssl-hash.h"
+#include "crypto.h"
 #include "header.h"
 #include "util.h"
 
@@ -14,7 +14,7 @@
 
 std::size_t block_size = 4 << 20; // 4 MiB
 std::string cipher = "aes-cbc-essiv:sha256";
-auto hash = OpenSSL::instance().new_hash("sha256");
+std::string hash_algo = "sha256";
 std::size_t iter_time = 1000;
 std::size_t key_size = 256;
 
@@ -42,7 +42,7 @@ void print_help(const std::string& name, std::ostream& out) {
   out << "  -h, --help                Display this message and exit." << std::endl;
   out << std::endl;
   out << "Available hash functions:";
-  for(auto name : OpenSSL::instance().hash_functions())
+  for(auto name : hash_functions())
     out << ' ' << name;
   out << std::endl;
   out << "Some hash functions might not be secure." << std::endl;
@@ -65,7 +65,7 @@ void parse_args(int argc, char *argv[]) {
         cipher = optarg;
         break;
       case 'H':
-        hash = OpenSSL::instance().new_hash(optarg);
+        hash_algo = optarg;
         break;
       case 'i':
         iter_time = from_string<std::size_t>(optarg);
@@ -101,23 +101,19 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  Hash hash(hash_algo);
+
   key_size /= 8;
   auto iter = PBKDF2::benchmark(hash, iter_time);
   iter /= (key_size + hash.size()-1)/hash.size();
-
-  unsigned char salt[16];
-  // Does it matter if the salt is from a Debian random number generator?
-  if (RAND_bytes(salt, 16) != 1) {
-    std::cerr << "Salt generation failed." << std::endl;
-    return 1;
-  }
 
   Params params;
   params.block_size = block_size;
   params.iters = iter;
   params.key_size = key_size;
   params.cipher = cipher;
-  params.hash = hash;
+  params.hash = hash_algo;
+  params.salt = random_string(16);
   try {
     params.store(argv[optind]);
   } catch(const std::exception& e) {

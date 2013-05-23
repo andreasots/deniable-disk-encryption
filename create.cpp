@@ -1,5 +1,5 @@
 #include "header.h"
-#include "getpass.h"
+#include "pinentry.h"
 #include <getopt.h>
 #include <iostream>
 #include <cstdlib>
@@ -47,8 +47,15 @@ int main(int argc, char *argv[]) {
   Params params;
   params.load(argv[optind]);
 
-  std::cout << "Password: " << std::flush;
-  std::cout << getpass() << std::endl;
+  std::string passphrase;
+  Pinentry pinentry;
+  pinentry.SETDESC("Enter passphrases for all partitions on this volume. "
+      "Enter an empty passphrase after last passphrase.");
+  pinentry.SETPROMPT("Passphrase:");
+  do {
+    passphrase = pinentry.GETPIN();
+    std::cout << passphrase << std::endl;
+  } while (passphrase != "");
 
   return 0;
 }

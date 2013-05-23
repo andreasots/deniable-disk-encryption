@@ -4,7 +4,6 @@
 #define HEADER_MAGIC_STR "\x7c\x32\xc7\x8d"
 
 #include "util.h"
-#include "openssl-hash.h"
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -12,8 +11,7 @@
 
 struct Params {
   std::size_t block_size, iters, key_size;
-  std::string cipher;
-  OpenSSL::Hash hash;
+  std::string hash, cipher, salt;
 
   void store(const std::string& devname) {
     std::ofstream device(devname);
@@ -26,9 +24,10 @@ struct Params {
     device.write(htole32_str(block_size).data(), 4);
     device.write(htole32_str(cipher.size()).data(), 4);
     device.write(cipher.data(), cipher.size());
-    auto algo = hash.algo();
-    device.write(htole32_str(algo.size()).data(), 4);
-    device.write(algo.data(), algo.size());
+    device.write(htole32_str(hash.size()).data(), 4);
+    device.write(hash.data(), hash.size());
+    device.write(htole32_str(salt.size()).data(), 4);
+    device.write(salt.data(), salt.size());
     device.write(htole32_str(iters).data(), 4);
   }
 
@@ -53,8 +52,13 @@ struct Params {
 
     std::size_t hash_size = le32toh_str(std::string(buf+offset, 4));
     offset += 4;
-    hash = OpenSSL::instance().new_hash(std::string(buf+offset, hash_size));
+    hash = std::string(buf+offset, hash_size);
     offset += hash_size;
+
+    std::size_t salt_size = le32toh_str(std::string(buf+offset, 4));
+    offset += 4;
+    salt = std::string(buf+offset, salt_size);
+    offset += salt_size;
 
     iters = le32toh_str(std::string(buf+offset, 4));
     offset += 4;

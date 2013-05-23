@@ -1,6 +1,6 @@
-CXXFLAGS := -std=c++11 $(CXXFLAGS) $(shell pkg-config --cflags libcrypto)
-LDFLAGS := $(LDFLAGS) $(shell pkg-config --libs libcrypto)
-OBJ := getpass.o openssl-hash.o PBKDF2.o
+CXXFLAGS := -std=c++11 $(CXXFLAGS)
+LDFLAGS := $(LDFLAGS) -lassuan -lgcrypt
+OBJ := crypto.o PBKDF2.o pinentry.o
 PROGS := format create
 all: $(PROGS)
 .SECONDARY:
