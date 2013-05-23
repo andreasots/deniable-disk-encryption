@@ -5,6 +5,8 @@ PROGS := format create
 all: $(PROGS)
 .SECONDARY:
 
+%: %.cpp
+
 %: %.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $*.o $(LDFLAGS) -o $@ $(OBJ)
 
