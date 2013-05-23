@@ -2,9 +2,6 @@
 #include "util.h"
 #include <chrono>
 
-const static std::string PBKDF2_BENCHMARK_PASSWORD("password123");
-const static std::string PBKDF2_BENCHMARK_SALT("0123456789ABCDEF");
- 
 std::string PBKDF2::PBKDF2(OpenSSL::Hash& hash,
     const std::string& password, const std::string& salt,
     std::size_t iterations, std::size_t length) {
@@ -35,16 +32,18 @@ std::string PBKDF2::F(OpenSSL::Hash& hash,
 }
 
 std::size_t PBKDF2::benchmark(OpenSSL::Hash& hash, std::size_t time) {
+  const static std::string PASSWORD("password123");
+  const static std::string SALT("0123456789ABCDEF");
   int i = 1;
   auto stop = std::chrono::milliseconds(time);
   auto start = std::chrono::steady_clock::now();
   hash.reset();
-  hash.update(PBKDF2_BENCHMARK_PASSWORD + PBKDF2_BENCHMARK_SALT + htobe32_str(1));
+  hash.update(PASSWORD + SALT + htobe32_str(1));
   std::string res, U = hash.digest();
   res = U;
   hash.reset();
   while (true) {
-    hash.update(PBKDF2_BENCHMARK_PASSWORD + U);
+    hash.update(PASSWORD + U);
     U = hash.digest();
     hash.reset();
     for (std::size_t j = 0; j < U.size(); j++)

@@ -4,8 +4,10 @@
 #define HEADER_MAGIC_STR "\x7c\x32\xc7\x8d"
 
 #include "util.h"
+#include "openssl-hash.h"
 #include <fstream>
 #include <stdexcept>
+#include <string>
 
 struct Params {
   std::size_t block_size, iters, key_size;

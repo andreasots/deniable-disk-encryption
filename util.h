@@ -2,6 +2,7 @@
 #define UTIL_H_
 
 #include <cstdint>
+#include <string>
 
 static inline std::string htole32_str(std::uint32_t i) {
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
