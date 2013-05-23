@@ -77,6 +77,7 @@ std::vector<std::string> hash_functions() {
   if ((error = gcry_md_list(algos, &num)) != GPG_ERR_NO_ERROR)
     throw gpg_exception(error);
   std::vector<std::string> ret;
+  ret.reserve();
   for (int algo : algos)
     ret.push_back(gcry_md_algo_name(algo));
   return ret;
