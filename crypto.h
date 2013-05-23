@@ -30,9 +30,9 @@ class Hash {
 class Symmetric {
 };
 
-static inline std::string random_string(std::size_t n) {
+static inline std::string nonce(std::size_t n) {
   unsigned char buf[n];
-  gcry_randomize(buf, n, GCRY_STRONG_RANDOM);
+  gcry_create_nonce(buf, n);
   return std::string(reinterpret_cast<char*>(buf), n);
 }
 

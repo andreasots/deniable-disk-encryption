@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
   params.key_size = key_size;
   params.cipher = cipher;
   params.hash = hash_algo;
-  params.salt = random_string(16);
+  params.salt = nonce(16);
   try {
     params.store(argv[optind]);
   } catch(const std::exception& e) {
