@@ -8,14 +8,27 @@
 #include <stdexcept>
 #include <string>
 #include <cstring>
+#include <vector>
 
 struct Params {
   std::size_t block_size, iters, key_size;
   std::string hash, cipher, salt;
 
-  void store(const std::string& devname);
-  void load(const std::string& devname);
-  std::uint64_t locate_superblock(const std::string& passphrase, std::uint64_t blocks);
+  void store(std::ostream& devname);
+  void load(std::istream& devname);
+  std::uint64_t locate_superblock(const std::string& passphrase,
+      std::uint64_t blocks);
+};
+
+struct Superblock {
+  std::vector<std::uint64_t> blocks;
+  const Params& param;
+  const std::string key, iv;
+
+  Superblock(const Params&, const std::string& passphrase);
+
+  void store(std::ostream& dev);
+  void load(std::istream& dev);
 };
 
 #endif  // HEADER_H_

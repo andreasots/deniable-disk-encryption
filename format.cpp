@@ -59,7 +59,9 @@ void parse_args(int argc, char *argv[]) {
   while((c = getopt_long(argc, argv, "b:c:H:hi:s:", options, &option_index)) != -1)
     switch(c) {
       case 'b':
-        block_size = from_string<std::size_t>(optarg);
+        block_size = std::max(from_string<int>(optarg), 0);
+        if (block_size == 0)
+          throw std::runtime_error("Block size must be a positive integer");
         if (block_size % 512 != 0)
           throw std::runtime_error("Block size must be a multiple of 512");
         break;
@@ -70,12 +72,14 @@ void parse_args(int argc, char *argv[]) {
         hash_algo = optarg;
         break;
       case 'i':
-        iter_time = from_string<std::size_t>(optarg);
+        iter_time = std::max(from_string<int>(optarg), 0);
         if (iter_time == 0)
           throw std::runtime_error("Iteration time must be a positive integer");
         break;
       case 's':
-        key_size = from_string<std::size_t>(optarg);
+        key_size = std::max(from_string<int>(optarg), 0);
+        if (key_size == 0)
+          throw std::runtime_error("Key size must be a positive integer");
         if (key_size % 8 != 0)
           throw std::runtime_error("Key size must be a multiple of 8");
         break;
@@ -118,8 +122,9 @@ int main(int argc, char *argv[]) {
   params.cipher = cipher;
   params.hash = hash_algo;
   params.salt = nonce(16);
+  std::ofstream device(argv[optind]);
   try {
-    params.store(argv[optind]);
+    params.store(device);
   } catch(const std::exception& e) {
     std::cerr << "Device " << argv[optind] << " doesn't exist or access ";
     std::cerr << "denied." << std::endl;

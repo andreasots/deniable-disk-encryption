@@ -45,9 +45,8 @@ int main(int argc, char *argv[]) {
   }
 
   Params params;
-  params.load(argv[optind]);
-
   std::fstream device(argv[optind], std::ios::in | std::ios::out);
+  params.load(device);
   std::uint64_t blocks = device.seekg(0, std::ios::end).tellg()/params.block_size;
 
   std::string passphrase;

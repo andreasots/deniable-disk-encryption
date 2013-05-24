@@ -3,8 +3,8 @@
 #include "PBKDF2.h"
 #include <gcrypt.h>
 
-void Params::store(const std::string& devname) {
-  std::ofstream device(devname);
+void Params::store(std::ostream& device) {
+  device.seekp(0);
   device.exceptions(std::ios::failbit | std::ios::badbit);
   
   // Wipe header block
@@ -26,8 +26,8 @@ void Params::store(const std::string& devname) {
   device.write(htole32_str(iters).data(), 4);
 }
 
-void Params::load(const std::string& devname) {
-  std::ifstream device(devname);
+void Params::load(std::istream& device) {
+  device.seekg(0);
   device.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
   
   { //  Magic number
