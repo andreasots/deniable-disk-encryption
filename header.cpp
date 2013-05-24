@@ -52,11 +52,12 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("cipher size");
     std::size_t cipher_size = le32toh_str(std::string(buf, 4));
-    char cipher_buf[cipher_size];
-    device.read(cipher_buf, cipher_size);
-    if (device.tellg() > block_size)
+    if (device.tellg() + cipher_size > block_size)
       throw std::out_of_range("cipher");
+    char *cipher_buf = new char[cipher_size];
+    device.read(cipher_buf, cipher_size);
     cipher = std::string(cipher_buf, cipher_size);
+    delete[] cipher_buf;
   }
   
   { // hash function
@@ -65,11 +66,12 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("hash length");
     std::size_t hash_size = le32toh_str(std::string(buf, 4));
-    char hash_buf[hash_size];
-    device.read(hash_buf, hash_size);
-    if (device.tellg() > block_size)
+    if (device.tellg() + hash_size > block_size)
       throw std::out_of_range("hash");
+    char *hash_buf = new char[hash_size];
+    device.read(hash_buf, hash_size);
     hash = std::string(hash_buf, hash_size);
+    delete[] hash_buf;
   }
 
   { // salt
@@ -78,11 +80,12 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("salt size");
     std::size_t salt_size = le32toh_str(std::string(buf, 4));
-    char salt_buf[salt_size];
-    device.read(salt_buf, salt_size);
-    if (device.tellg() > block_size)
+    if (device.tellg() + salt_size > block_size)
       throw std::out_of_range("salt");
+    char *salt_buf = new char[salt_size];
+    device.read(salt_buf, salt_size);
     salt = std::string(salt_buf, salt_size);
+    delete[] salt_buf;
   }
 
   { // PBKDF2 iterations
@@ -103,11 +106,11 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
     std::string hash_max(_hash.size(), '\xFF');
     if ((error = gcry_mpi_scan(&divisor, GCRYMPI_FMT_USG,
             hash_max.data(), hash_max.size(), nullptr)) != GPG_ERR_NO_ERROR)
-      throw gpg_exception(error);
+      throw std::system_error(error, gpg_category());
     blocks = htobe64(blocks-1);
     if ((error = gcry_mpi_scan(&L, GCRYMPI_FMT_USG,
             &blocks, 8, nullptr)) != GPG_ERR_NO_ERROR)
-      throw gpg_exception(error);
+      throw std::system_error(error, gpg_category());
     gcry_mpi_div(divisor, nullptr, divisor, L, 0);
   }
 
@@ -117,7 +120,7 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
     std::string key = PBKDF2::F(_hash, passphrase, salt, iters, i);
     if ((error = gcry_mpi_scan(&x, GCRYMPI_FMT_USG,
             key.data(), key.size(), nullptr)) != GPG_ERR_NO_ERROR)
-      throw gpg_exception(error);
+      throw std::system_error(error, gpg_category());
     gcry_mpi_div(x, nullptr, x, divisor, 0);
   } while (gcry_mpi_cmp(x, L) >= 0);
 
@@ -125,7 +128,7 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
   std::size_t written = 0;
   if ((error = gcry_mpi_print(GCRYMPI_FMT_USG, buf, 8, &written, x))
         != GPG_ERR_NO_ERROR)
-    throw gpg_exception(error);
+    throw std::system_error(error, gpg_category());
 
   std::uint64_t ret = 0;
   std::size_t offset = 0;

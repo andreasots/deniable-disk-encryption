@@ -3,15 +3,19 @@
 
 #include <cstdint>
 #include <string>
-#include <stdexcept>
-#include <sstream>
+#include <system_error>
 #include <gpg-error.h>
 
-static inline std::runtime_error gpg_exception(gpg_error_t err) {
-  std::stringstream ss;
-  ss << gpg_strsource(err) << ": " << gpg_strerror(err);
-  return std::runtime_error(ss.str());
-}
+class gpg_category : public std::error_category {
+ public:
+  virtual const char* name() const noexcept {
+    return "GPG";
+  }
+
+  virtual std::string message(int code) const noexcept {
+    return gpg_strsource(code) + std::string(": ") + gpg_strerror(code);
+  }
+};
 
 static inline std::string htole32_str(std::uint32_t i) {
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__

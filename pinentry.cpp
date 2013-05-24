@@ -6,11 +6,11 @@
 Pinentry::Pinentry() {
   gpg_error_t error;
   if ((error = assuan_new(&_pinentry)) != GPG_ERR_NO_ERROR)
-    throw gpg_exception(error);
+    throw std::system_error(error, gpg_category());
   const char *argv[] = {"pinentry", nullptr};
   if ((error = assuan_pipe_connect(_pinentry, "/usr/bin/pinentry", argv, nullptr,
           nullptr, nullptr, 0)) != GPG_ERR_NO_ERROR)
-    throw gpg_exception(error);
+    throw std::system_error(error, gpg_category());
 }
 
 static void nodata_command(assuan_context_t ctx,
@@ -25,7 +25,7 @@ static void nodata_command(assuan_context_t ctx,
           nullptr, nullptr,  // inquiry callback
           nullptr, nullptr)  // status callback
           ) != GPG_ERR_NO_ERROR)
-    throw gpg_exception(error);
+    throw std::system_error(error, gpg_category());
 }
 
 Pinentry::~Pinentry() {
@@ -57,11 +57,17 @@ Pinentry_NODATA_COMMAND_ARG(SETQUALITYBAR_TT)
 Pinentry_NODATA_COMMAND(MESSAGE)
 
 bool Pinentry::CONFIRM() {
-  try {
-    nodata_command(_pinentry, "CONFIRM", "");
-    return true;
-  } catch(...) {
-    return false;
+  gpg_error_t error;
+  switch (gpg_err_code(error = assuan_transact(_pinentry, "CONFIRM",
+        nullptr, nullptr,
+        nullptr, nullptr,
+        nullptr, nullptr))) {
+    case GPG_ERR_NO_ERROR:
+      return true;
+    case GPG_ERR_NOT_CONFIRMED:
+      return false;
+    default:
+      throw std::system_error(error, gpg_category());
   }
 }
 
@@ -79,7 +85,7 @@ std::string Pinentry::GETPIN() {
           nullptr, nullptr,  // inquiry callback
           nullptr, nullptr)  // status callback
         ) != GPG_ERR_NO_ERROR)
-    throw gpg_exception(error);
+    throw std::system_error(error, gpg_category());
   return ret;
 }
 

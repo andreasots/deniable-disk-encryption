@@ -43,11 +43,21 @@ int main(int argc, char *argv[]) {
     std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
     return 1;
   }
-
-  Params params;
+  
   std::fstream device(argv[optind], std::ios::in | std::ios::out);
-  params.load(device);
+  Params params;
+  try {
+    params.load(device);
+  } catch(const std::exception& e) {
+    std::cerr << "Error: Header corrupt." << std::endl;
+    return 1;
+  }
   std::uint64_t blocks = device.seekg(0, std::ios::end).tellg()/params.block_size;
+  
+  if (blocks <= 1) {
+    std::cerr << "No room for any partitions." << std::endl;
+    return 1;
+  }
 
   std::string passphrase;
   Pinentry pinentry;
