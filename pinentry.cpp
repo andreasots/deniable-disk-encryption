@@ -7,7 +7,7 @@ Pinentry::Pinentry() {
   gpg_error_t error;
   if ((error = assuan_new(&_pinentry)) != GPG_ERR_NO_ERROR)
     throw gpg_exception(error);
-  const char *argv[] = {"pinentry"};
+  const char *argv[] = {"pinentry", nullptr};
   if ((error = assuan_pipe_connect(_pinentry, "/usr/bin/pinentry", argv, nullptr,
           nullptr, nullptr, 0)) != GPG_ERR_NO_ERROR)
     throw gpg_exception(error);
@@ -29,7 +29,10 @@ static void nodata_command(assuan_context_t ctx,
 }
 
 Pinentry::~Pinentry() {
-  nodata_command(_pinentry, "BYE", "");
+  assuan_transact(_pinentry, "BYE",
+      nullptr, nullptr,
+      nullptr, nullptr,
+      nullptr, nullptr);
   assuan_release(_pinentry);
 }
 

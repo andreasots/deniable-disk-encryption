@@ -47,6 +47,9 @@ int main(int argc, char *argv[]) {
   Params params;
   params.load(argv[optind]);
 
+  std::fstream device(argv[optind], std::ios::in | std::ios::out);
+  std::uint64_t blocks = device.seekg(0, std::ios::end).tellg()/params.block_size;
+
   std::string passphrase;
   Pinentry pinentry;
   pinentry.SETDESC("Enter passphrases for all partitions on this volume. "
@@ -54,7 +57,7 @@ int main(int argc, char *argv[]) {
   pinentry.SETPROMPT("Passphrase:");
   do {
     passphrase = pinentry.GETPIN();
-    std::cout << passphrase << std::endl;
+    std::cout << params.locate_superblock(passphrase, blocks) << std::endl;
   } while (passphrase != "");
 
   return 0;

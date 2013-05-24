@@ -60,6 +60,8 @@ void parse_args(int argc, char *argv[]) {
     switch(c) {
       case 'b':
         block_size = from_string<std::size_t>(optarg);
+        if (block_size % 512 != 0)
+          throw std::runtime_error("Block size must be a multiple of 512");
         break;
       case 'c':
         cipher = optarg;
@@ -69,6 +71,8 @@ void parse_args(int argc, char *argv[]) {
         break;
       case 'i':
         iter_time = from_string<std::size_t>(optarg);
+        if (iter_time == 0)
+          throw std::runtime_error("Iteration time must be a positive integer");
         break;
       case 's':
         key_size = from_string<std::size_t>(optarg);
