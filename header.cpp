@@ -17,6 +17,7 @@ void Params::store(std::ostream& device) {
 
   device.write(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR)-1);
   device.write(htole32_str(block_size).data(), 4);
+  device.write(htole32_str(key_size).data(), 4);
   device.write(htole32_str(cipher.size()).data(), 4);
   device.write(cipher.data(), cipher.size());
   device.write(htole32_str(hash.size()).data(), 4);
@@ -45,6 +46,15 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("block size");
   }
+
+  {  // key size
+    char buf[4];
+    device.read(buf, 4);
+    if (device.tellg() > block_size)
+      throw std::out_of_range("key size");
+    key_size = le32toh_str(std::string(buf, 4));
+  }
+
 
   {  // dm-crypt cipher
     char buf[4];
