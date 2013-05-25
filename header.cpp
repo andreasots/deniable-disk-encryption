@@ -3,108 +3,73 @@
 #include "PBKDF2.h"
 #include <gcrypt.h>
 
-void Params::store(std::ostream& device) {
-  device.seekp(0);
-  device.exceptions(std::ios::failbit | std::ios::badbit);
+void Params::store(BlockDevice& device) {
+  device.seek(0);
   
   // Wipe header block
-  {
-    char buf[block_size];
-    std::memset(buf, 0, block_size);
-    device.write(buf, block_size);
-    device.seekp(0);
-  }
+  device.write(std::string(block_size, '\0'));
+  device.seek(0);
 
-  device.write(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR)-1);
-  device.write(htole32_str(block_size).data(), 4);
-  device.write(htole32_str(key_size).data(), 4);
-  device.write(htole32_str(device_cipher.size()).data(), 4);
-  device.write(device_cipher.data(), device_cipher.size());
-  device.write(htole32_str(hash.size()).data(), 4);
-  device.write(hash.data(), hash.size());
-  device.write(htole32_str(salt.size()).data(), 4);
-  device.write(salt.data(), salt.size());
-  device.write(htole32_str(iters).data(), 4);
+  device.write(std::string(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR)-1));
+  device.write(htole32_str(block_size));
+  device.write(htole32_str(key_size));
+  device.write(htole32_str(device_cipher.size()));
+  device.write(device_cipher);
+  device.write(htole32_str(hash.size()));
+  device.write(hash.data());
+  device.write(htole32_str(salt.size()));
+  device.write(salt.data());
+  device.write(htole32_str(iters));
 }
 
-void Params::load(std::istream& device) {
-  device.seekg(0);
-  device.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
+static std::string read_bytes(BlockDevice& device, std::size_t n,
+    std::int64_t& bytes, const std::string& message) {
+  if (bytes < n)
+    throw std::out_of_range(message);
+  bytes -= n;
+  return device.read(n);
+}
+
+static inline std::uint32_t read_uint_le32(BlockDevice& device,
+    std::int64_t& bytes, const std::string& message) {
+  return le32toh_str(read_bytes(device, 4, bytes, message));
+}
+
+void Params::load(BlockDevice& device) {
+  device.seek(0);
+  std::int64_t bytes = 0;
   
-  { //  Magic number
-    char buf[sizeof(HEADER_MAGIC_STR)];
-    device.read(buf, sizeof(HEADER_MAGIC_STR)-1);
-    buf[sizeof(HEADER_MAGIC_STR)-1] = '\0';
-    if (std::string(buf) != HEADER_MAGIC_STR)
-      throw std::runtime_error("Wrong magic number");
-  }
+  // magic number
+  if (device.read(sizeof(HEADER_MAGIC_STR)-1) != HEADER_MAGIC_STR)
+    throw std::runtime_error("Wrong magic number");
+  bytes -= sizeof(HEADER_MAGIC_STR)-1;
   
-  {  // block size
-    char buf[4];
-    device.read(buf, 4);
-    block_size = le32toh_str(std::string(buf, 4));
-    if (device.tellg() > block_size)
-      throw std::out_of_range("block size");
-  }
+  // block size
+  block_size = le32toh_str(device.read(4));
+  bytes += block_size - 4;
+  if (bytes < 0)
+    throw std::out_of_range("block size");
 
-  {  // key size
-    char buf[4];
-    device.read(buf, 4);
-    if (device.tellg() > block_size)
-      throw std::out_of_range("key size");
-    key_size = le32toh_str(std::string(buf, 4));
-  }
+  // key size
+  key_size = read_uint_le32(device, bytes, "key size");
 
-
-  {  // dm-crypt cipher
-    char buf[4];
-    device.read(buf, 4);
-    if (device.tellg() > block_size)
-      throw std::out_of_range("cipher size");
-    std::size_t cipher_size = le32toh_str(std::string(buf, 4));
-    if (static_cast<std::uint64_t>(device.tellg()) + cipher_size > block_size)
-      throw std::out_of_range("cipher");
-    char *cipher_buf = new char[cipher_size];
-    device.read(cipher_buf, cipher_size);
-    device_cipher = std::string(cipher_buf, cipher_size);
-    delete[] cipher_buf;
+  {  // dm-crypt cipher    
+    std::size_t cipher_size = read_uint_le32(device, bytes, "device cipher size");
+    device_cipher = read_bytes(device, cipher_size, bytes, "device cipher");
   }
   
-  { // hash function
-    char buf[4];
-    device.read(buf, 4);
-    if (device.tellg() > block_size)
-      throw std::out_of_range("hash length");
-    std::size_t hash_size = le32toh_str(std::string(buf, 4));
-    if (static_cast<std::uint64_t>(device.tellg()) + hash_size > block_size)
-      throw std::out_of_range("hash");
-    char *hash_buf = new char[hash_size];
-    device.read(hash_buf, hash_size);
-    hash = std::string(hash_buf, hash_size);
-    delete[] hash_buf;
+  {  // hash function
+    std::size_t hash_size = read_uint_le32(device, bytes, "hash function size");
+    hash = read_bytes(device, hash_size, bytes, "hash function");
   }
 
-  { // salt
-    char buf[4];
-    device.read(buf, 4);
-    if (device.tellg() > block_size)
-      throw std::out_of_range("salt size");
-    std::size_t salt_size = le32toh_str(std::string(buf, 4));
-    if (static_cast<std::uint64_t>(device.tellg()) + salt_size > block_size)
-      throw std::out_of_range("salt");
-    char *salt_buf = new char[salt_size];
-    device.read(salt_buf, salt_size);
-    salt = std::string(salt_buf, salt_size);
-    delete[] salt_buf;
+  {  // salt
+    std::size_t salt_size = read_uint_le32(device, bytes, "salt size");
+    salt = read_bytes(device, salt_size, bytes, "salt");
   }
 
-  { // PBKDF2 iterations
-    char buf[4];
-    device.read(buf, 4);
-    if (device.tellg() > block_size)
-      throw std::out_of_range("iterations");
-    iters = le32toh_str(std::string(buf, 4));
-  }
+  // PBKDF2 iterations
+  iters = read_uint_le32(device, bytes, "PBKDF2 iterations");
 }
 
 std::uint64_t Params::locate_superblock(const std::string& passphrase,

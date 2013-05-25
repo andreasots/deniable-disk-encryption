@@ -7,7 +7,7 @@
 
 #include <argp.h>
 #include <iostream>
-#include <fstream>
+#include "blockdevice.h"
 #include <sstream>
 #include <stdexcept>
 #include <chrono>
@@ -46,7 +46,7 @@ template <class T> T from_string(const std::string& str) {
   return ret;
 }
 
-std::ofstream device;
+BlockDevice device;
 
 error_t parse_opt(int key, char *arg, struct argp_state *state) {
   Params *params = reinterpret_cast<Params*>(state->input);
@@ -60,8 +60,7 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
       params->device_cipher = arg;
       break;
     case 'C':
-      params->superblock_cipher = arg;
-      break;
+      params->superblock_cipher = arg;      break;
     case 'H':
       params->hash = arg;
       break;
@@ -76,11 +75,17 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
         argp_failure(state, 1, 0, "Key size must be a multiple of 8 bits");
       break;
     case ARGP_KEY_ARG:
+      if (device.open())
+        argp_failure(state, 1, 0, "Too many arguments");
       try {
-        device.open(arg);
-      } catch(const std::ios::failure& e) {
+        device = BlockDevice(arg);
+      } catch(const std::exception& e) {
         argp_failure(state, 1, 0, e.what());
       }
+      break;
+    case ARGP_KEY_END:
+      if (!device.open())
+        argp_failure(state, 1, 0, "Too few arguments");
       break;
     default:
       return ARGP_ERR_UNKNOWN;
@@ -98,9 +103,7 @@ int main(int argc, char *argv[]) {
   params.superblock_cipher = "AES256";
   params.salt = nonce(16);
 
-  device.exceptions(std::ios::failbit | std::ios::badbit);
-
-  argp argp = {options, parse_opt, "DEVICE", doc};
+  argp argp = {options, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
   argp_parse(&argp, argc, argv, 0, nullptr, &params);
 
   Hash hash(hash_algo);

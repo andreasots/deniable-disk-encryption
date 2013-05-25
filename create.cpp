@@ -1,51 +1,40 @@
+#include "blockdevice.h"
 #include "header.h"
 #include "pinentry.h"
-#include <getopt.h>
+#include <argp.h>
 #include <iostream>
 #include <cstdlib>
 
-option options[] = {
-  {"help", no_argument, nullptr, 'h'},
-  {nullptr, 0, nullptr, 0}
-};
+const char* doc = "Create a new encrypted partition on DEVICE";
 
-void print_help(const std::string& name, std::ostream& out) {
-  out << name << " [OPTION]... DEVICE" << std::endl;
-  out << "Create a new partition on DEVICE." << std::endl;
-  out << std::endl;
-  out << "  -h, --help    Print this message and exit." << std::endl;
-}
-
-void parse_args(int argc, char *argv[]) {
-  int option_index, c;
-  while ((c = getopt_long(argc, argv, "h", options, &option_index)) != -1)
-    switch (c) {
-      case 'h':
-        print_help(argv[0], std::cout);
-        std::exit(0);
-      case '?':
-        throw std::runtime_error(std::string());
-      default:
-        throw std::runtime_error("Unhandled argument");
-    }
+error_t parse_opt(int key, char *arg, struct argp_state *state) {
+  BlockDevice &device = *reinterpret_cast<BlockDevice*>(state->input);
+  switch (key) {
+    case ARGP_KEY_ARG:
+      if (device.open())
+        argp_failure(state, 1, 0, "Too many arguments");
+      try {
+        device = BlockDevice(arg);
+      } catch(const std::exception& e) {
+        argp_failure(state, 1, 0, e.what());
+      }
+      break;
+    case ARGP_KEY_END:
+      if (!device.open())
+        argp_failure(state, 1, 0, "Too few arguments");
+      break;
+    default:
+      return ARGP_ERR_UNKNOWN;
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
-  try {
-    parse_args(argc, argv);
-  } catch (const std::exception& e) {
-    if (e.what() != std::string())
-      std::cerr << "Error: " << e.what() << std::endl;
-    std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
-    return 1;
-  }
-  if (argc - optind != 1) {
-    std::cerr << argv[0] << " required a device path as an argument." << std::endl;
-    std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
-    return 1;
-  }
-  
-  std::fstream device(argv[optind], std::ios::in | std::ios::out);
+  BlockDevice device;
+
+  argp argp = {nullptr, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
+  argp_parse(&argp, argc, argv, 0, nullptr, &device);
+
   Params params;
   try {
     params.load(device);
@@ -53,7 +42,7 @@ int main(int argc, char *argv[]) {
     std::cerr << "Error: Header corrupt." << std::endl;
     return 1;
   }
-  std::uint64_t blocks = device.seekg(0, std::ios::end).tellg()/params.block_size;
+  std::uint64_t blocks = device.size()/params.block_size;
   
   if (blocks <= 1) {
     std::cerr << "No room for any partitions." << std::endl;
