@@ -60,7 +60,8 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
       params->device_cipher = arg;
       break;
     case 'C':
-      params->superblock_cipher = arg;      break;
+      params->superblock_cipher = arg;
+      break;
     case 'H':
       params->hash = arg;
       break;
