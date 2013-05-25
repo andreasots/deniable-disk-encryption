@@ -32,6 +32,7 @@ void parse_args(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   try {
+    parse_args(argc, argv);
   } catch (const std::exception& e) {
     if (e.what() != std::string())
       std::cerr << "Error: " << e.what() << std::endl;

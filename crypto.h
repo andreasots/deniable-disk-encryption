@@ -37,5 +37,6 @@ static inline std::string nonce(std::size_t n) {
 }
 
 std::vector<std::string> hash_functions();
+std::vector<std::string> block_ciphers();
  
 #endif  // CRYPTO_H_

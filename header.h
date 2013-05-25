@@ -12,7 +12,7 @@
 
 struct Params {
   std::size_t block_size, iters, key_size;
-  std::string hash, cipher, salt;
+  std::string hash, device_cipher, superblock_cipher, salt;
 
   void store(std::ostream& devname);
   void load(std::istream& devname);

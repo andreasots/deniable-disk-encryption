@@ -32,6 +32,7 @@ void parse_args(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   try {
+    parse_args(argc, argv);
   } catch (const std::exception& e) {
     if (e.what() != std::string())
       std::cerr << "Error: " << e.what() << std::endl;
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
   }
   std::uint64_t blocks = device.seekg(0, std::ios::end).tellg()/params.block_size;
 
-  std::cout << "Block size: " << params.block_size << std::endl;
+  std::cout << "Block size: " << params.block_size << " bytes" << std::endl;
   std::cout << "Blocks total: " << blocks << std::endl;
   std::cout << "PBKDF2 iterations: " << params.iters << std::endl;
   std::cout << "PBKDF2 salt: ";
@@ -64,9 +65,9 @@ int main(int argc, char *argv[]) {
     std::cout << static_cast<int>(static_cast<unsigned char>(c));
   }
   std::cout << std::dec << std::endl;
-  std::cout << "Key size: " << params.key_size*8 << std::endl;
+  std::cout << "Key size: " << params.key_size*8 << " bits" << std::endl;
   std::cout << "Hash algorithm: " << params.hash << std::endl;
-  std::cout << "Encryption algorithm: " << params.cipher << std::endl;
+  std::cout << "Encryption algorithm: " << params.device_cipher << std::endl;
   
   return 0;
 }

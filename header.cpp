@@ -18,8 +18,8 @@ void Params::store(std::ostream& device) {
   device.write(HEADER_MAGIC_STR, sizeof(HEADER_MAGIC_STR)-1);
   device.write(htole32_str(block_size).data(), 4);
   device.write(htole32_str(key_size).data(), 4);
-  device.write(htole32_str(cipher.size()).data(), 4);
-  device.write(cipher.data(), cipher.size());
+  device.write(htole32_str(device_cipher.size()).data(), 4);
+  device.write(device_cipher.data(), device_cipher.size());
   device.write(htole32_str(hash.size()).data(), 4);
   device.write(hash.data(), hash.size());
   device.write(htole32_str(salt.size()).data(), 4);
@@ -62,11 +62,11 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("cipher size");
     std::size_t cipher_size = le32toh_str(std::string(buf, 4));
-    if (device.tellg() + cipher_size > block_size)
+    if (static_cast<std::uint64_t>(device.tellg()) + cipher_size > block_size)
       throw std::out_of_range("cipher");
     char *cipher_buf = new char[cipher_size];
     device.read(cipher_buf, cipher_size);
-    cipher = std::string(cipher_buf, cipher_size);
+    device_cipher = std::string(cipher_buf, cipher_size);
     delete[] cipher_buf;
   }
   
@@ -76,7 +76,7 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("hash length");
     std::size_t hash_size = le32toh_str(std::string(buf, 4));
-    if (device.tellg() + hash_size > block_size)
+    if (static_cast<std::uint64_t>(device.tellg()) + hash_size > block_size)
       throw std::out_of_range("hash");
     char *hash_buf = new char[hash_size];
     device.read(hash_buf, hash_size);
@@ -90,7 +90,7 @@ void Params::load(std::istream& device) {
     if (device.tellg() > block_size)
       throw std::out_of_range("salt size");
     std::size_t salt_size = le32toh_str(std::string(buf, 4));
-    if (device.tellg() + salt_size > block_size)
+    if (static_cast<std::uint64_t>(device.tellg()) + salt_size > block_size)
       throw std::out_of_range("salt");
     char *salt_buf = new char[salt_size];
     device.read(salt_buf, salt_size);

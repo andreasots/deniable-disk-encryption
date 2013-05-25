@@ -5,7 +5,7 @@
 
 #include <openssl/rand.h>
 
-#include <getopt.h>
+#include <argp.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -13,40 +13,32 @@
 #include <chrono>
 
 std::size_t block_size = 4 << 20; // 4 MiB
-std::string cipher = "aes-cbc-essiv:sha256";
-std::string hash_algo = "sha256";
+const char* cipher = "aes-cbc-essiv:sha256";
+const char* superblock_cipher = "AES256";
+const char* hash_algo = "SHA256";
 std::size_t iter_time = 1000;
 std::size_t key_size = 256;
 
-option options[] = {
-  {"block-size", required_argument, nullptr, 'b'},
-  {"cipher", required_argument, nullptr, 'c'},
-  {"hash", required_argument, nullptr, 'H'},
-  {"iter-time", required_argument, nullptr, 'i'},
-  {"key-size", required_argument, nullptr, 's'},
-  {"help", no_argument, nullptr, 'h'},
-  {nullptr, 0, nullptr, 0}
+argp_option options[] = {
+  {"block-size", 'b', "BYTES", 0, "Block size in bytes", 0},
+  {"disk-cipher", 'c', "CIPHER", 0, "Cipher to use to encrypt the DEVICE", 0},
+  {"header-cipher", 'C', "CIPHER", 0,
+    "Cipher to use to encrypt partition headers", 0},
+  {"hash", 'H', "HASH", 0,
+    "Hash algorithm to use to generate partition keys from passphrases", 0},
+  {"iter-time", 'i', "MS", 0, "PBKDF2 iteration time in milliseconds", 0},
+  {"key-size", 's', "BITS", 0, "Disk encryption key size", 0},
+  {nullptr, 0, nullptr, 0, nullptr, 0}
 };
 
-void print_help(const std::string& name, std::ostream& out) {
-  out << name << " [OPTION]... DEVICE" << std::endl;
-  out << "Create a encrypted volume on DEVICE" << std::endl;
-  out << std::endl;
-  out << "Mandatory arguments to long options are mandatory for short options";
-  out << " too." << std::endl;
-  out << "  -b, --block-size=bytes    Size of blocks in bytes. Default: " << (4 << 20) << std::endl;
-  out << "  -c, --cipher=STRING       The cipher used to encrypt the disk (see /proc/crypto). Default: aes-cbc-essiv:sha256" << std::endl;
-  out << "  -H, --hash=STRING         The hash used to create the encryption key from the passphrase. Default: sha256" << std::endl;
-  out << "  -i, --iter-time=ms        PBKDF2 iteration time (in ms). Default: 1000" << std::endl;
-  out << "  -s, --key-size=bits       Key size in bits. Must be a multiple of 8. Default: 256" << std::endl;
-  out << "  -h, --help                Display this message and exit." << std::endl;
-  out << std::endl;
-  out << "Available hash functions:";
-  for(auto name : hash_functions())
-    out << ' ' << name;
-  out << std::endl;
-  out << "Some hash functions might not be secure." << std::endl;
-}
+const char* doc = "Create an encrypted volume on DEVICE\v\
+Default block size: 4194304 bytes or 4 MiB\n\
+Default disk cipher: aes-cbc-essiv:sha256\n\
+Default disk encryption key length: 256 bits\n\
+Default header cipher: AES256\n\
+Default hash algorithm: SHA256\n\
+Default PBKDF2 iteration time: 1000 ms or one second";
+
 
 template <class T> T from_string(const std::string& str) {
   T ret;
@@ -54,75 +46,68 @@ template <class T> T from_string(const std::string& str) {
   return ret;
 }
 
-void parse_args(int argc, char *argv[]) {
-  int option_index, c;
-  while((c = getopt_long(argc, argv, "b:c:H:hi:s:", options, &option_index)) != -1)
-    switch(c) {
-      case 'b':
-        block_size = std::max(from_string<int>(optarg), 0);
-        if (block_size == 0)
-          throw std::runtime_error("Block size must be a positive integer");
-        if (block_size % 512 != 0)
-          throw std::runtime_error("Block size must be a multiple of 512");
-        break;
-      case 'c':
-        cipher = optarg;
-        break;
-      case 'H':
-        hash_algo = optarg;
-        break;
-      case 'i':
-        iter_time = std::max(from_string<int>(optarg), 0);
-        if (iter_time == 0)
-          throw std::runtime_error("Iteration time must be a positive integer");
-        break;
-      case 's':
-        key_size = std::max(from_string<int>(optarg), 0);
-        if (key_size == 0)
-          throw std::runtime_error("Key size must be a positive integer");
-        if (key_size % 8 != 0)
-          throw std::runtime_error("Key size must be a multiple of 8");
-        break;
-      case 'h':
-        print_help(argv[0], std::cout);
-        exit(0);
-      case '?':
-        // getopt has already printed out an error message
-        throw std::runtime_error(std::string());
-      default:
-        throw std::runtime_error("Unhandled argument");
-    }
+std::ofstream device;
+
+error_t parse_opt(int key, char *arg, struct argp_state *state) {
+  Params *params = reinterpret_cast<Params*>(state->input);
+  switch(key) {
+    case 'b':
+      params->block_size = std::max(from_string<int>(arg), 0);
+      if (params->block_size < 512)
+        argp_failure(state, 1, 0, "Block size must be at least 512 bytes");
+      break;
+    case 'c':
+      params->device_cipher = arg;
+      break;
+    case 'C':
+      params->superblock_cipher = arg;
+      break;
+    case 'H':
+      params->hash = arg;
+      break;
+    case 'i':
+      params->iters = std::max(from_string<int>(arg), 0);
+      if (params->iters == 0)
+        argp_failure(state, 1, 0, "Iteration time must be a positive integer");
+      break;
+    case 's':
+      params->key_size = std::max(from_string<int>(arg), 0);
+      if (params->key_size == 0 || params->key_size % 8 != 0) 
+        argp_failure(state, 1, 0, "Key size must be a multiple of 8 bits");
+      break;
+    case ARGP_KEY_ARG:
+      try {
+        device.open(arg);
+      } catch(const std::ios::failure& e) {
+        argp_failure(state, 1, 0, e.what());
+      }
+      break;
+    default:
+      return ARGP_ERR_UNKNOWN;
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
-  try {
-    parse_args(argc, argv);
-  } catch(const std::runtime_error& e) {
-    if (e.what() != std::string())
-      std::cerr << "Error: " << e.what() << std::endl;
-    std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
-    return 1;
-  }
-  if (argc - optind != 1) {
-    std::cerr << argv[0] << " requires a device path an argument" << std::endl;
-    std::cerr << "Try '" << argv[0] << " --help' for more information." << std::endl;
-    return 1;
-  }
+  Params params;
+  params.block_size = 4 << 20;
+  params.iters = 1000;
+  params.key_size = 256/8;
+  params.hash = "SHA256";
+  params.device_cipher = "aes-cbc-essiv:sha256";
+  params.superblock_cipher = "AES256";
+  params.salt = nonce(16);
+
+  device.exceptions(std::ios::failbit | std::ios::badbit);
+
+  argp argp = {options, parse_opt, "DEVICE", doc};
+  argp_parse(&argp, argc, argv, 0, nullptr, &params);
 
   Hash hash(hash_algo);
 
-  key_size /= 8;
-  auto iter = PBKDF2::benchmark(hash, iter_time);
-  iter /= (key_size + hash.size()-1)/hash.size();
+  params.iters = PBKDF2::benchmark(hash, params.iters);
+  params.iters /= (key_size + hash.size()-1)/hash.size();
 
-  Params params;
-  params.block_size = block_size;
-  params.iters = iter;
-  params.key_size = key_size;
-  params.cipher = cipher;
-  params.hash = hash_algo;
-  params.salt = nonce(16);
-  std::ofstream device(argv[optind]);
   try {
     params.store(device);
   } catch(const std::exception& e) {
