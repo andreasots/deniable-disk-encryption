@@ -17,9 +17,9 @@ namespace {
 Hash::Hash(int algo) {
   gpg_error_t error;
   if ((error = gcry_md_test_algo(algo)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   if ((error = gcry_md_open(&_handle, algo, 0)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
 }
 
 Hash::Hash(const std::string& name)
@@ -29,7 +29,7 @@ Hash::Hash(const std::string& name)
 Hash::Hash(const Hash& hash) {
   gpg_error_t error;
   if ((error = gcry_md_copy(&_handle, hash._handle)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
 }
 
 Hash::Hash(Hash&& hash)
@@ -45,7 +45,7 @@ Hash& Hash::operator=(const Hash& hash) {
   gcry_md_hd_t h;
   gpg_error_t error;
   if ((error = gcry_md_copy(&h, hash._handle)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   gcry_md_close(_handle);
   _handle = h;
   return *this;
@@ -85,10 +85,10 @@ std::vector<std::string> hash_functions() {
   int num;
   gpg_error_t error;
   if ((error = gcry_md_list(nullptr, &num)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   int algos[num];
   if ((error = gcry_md_list(algos, &num)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   std::vector<std::string> ret;
   ret.reserve(num);
   for (int algo : algos)
@@ -101,10 +101,10 @@ std::vector<std::string> block_ciphers() {
   int num;
   gpg_error_t error;
   if ((error = gcry_cipher_list(nullptr, &num)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   int algos[num];
   if ((error = gcry_cipher_list(algos, &num)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
   std::vector<std::string> ret;
   ret.reserve(num);
   for (int algo : algos) {

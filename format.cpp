@@ -3,8 +3,6 @@
 #include "header.h"
 #include "util.h"
 
-#include <openssl/rand.h>
-
 #include <argp.h>
 #include <iostream>
 #include "blockdevice.h"
@@ -12,16 +10,10 @@
 #include <stdexcept>
 #include <chrono>
 
-std::size_t block_size = 4 << 20; // 4 MiB
-const char* cipher = "aes-cbc-essiv:sha256";
-const char* superblock_cipher = "AES256";
-const char* hash_algo = "SHA256";
-std::size_t iter_time = 1000;
-std::size_t key_size = 256;
-
 argp_option options[] = {
   {"block-size", 'b', "BYTES", 0, "Block size in bytes", 0},
-  {"disk-cipher", 'c', "CIPHER", 0, "Cipher to use to encrypt the DEVICE", 0},
+  {"disk-cipher", 'c', "CIPHER", 0,
+    "Cipher to use to encrypt the DEVICE (see /proc/crypto)", 0},
   {"header-cipher", 'C', "CIPHER", 0,
     "Cipher to use to encrypt partition headers", 0},
   {"hash", 'H', "HASH", 0,
@@ -31,7 +23,7 @@ argp_option options[] = {
   {nullptr, 0, nullptr, 0, nullptr, 0}
 };
 
-const char* doc = "Create an encrypted volume on DEVICE\v\
+const char* static_doc = "Create an encrypted volume on DEVICE\v\
 Default block size: 4194304 bytes or 4 MiB\n\
 Default disk cipher: aes-cbc-essiv:sha256\n\
 Default disk encryption key length: 256 bits\n\
@@ -94,31 +86,40 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
   return 0;
 }
 
-int main(int argc, char *argv[]) {
-  Params params;
-  params.block_size = 4 << 20;
-  params.iters = 1000;
-  params.key_size = 256/8;
-  params.hash = "SHA256";
-  params.device_cipher = "aes-cbc-essiv:sha256";
-  params.superblock_cipher = "AES256";
-  params.salt = nonce(16);
-
-  argp argp = {options, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
-  argp_parse(&argp, argc, argv, 0, nullptr, &params);
-
-  Hash hash(hash_algo);
-
-  params.iters = PBKDF2::benchmark(hash, params.iters);
-  params.iters /= (key_size + hash.size()-1)/hash.size();
-
+int main(int argc, char *argv[])
   try {
+    Params params;
+    params.block_size = 4 << 20;
+    params.iters = 1000;
+    params.key_size = 256/8;
+    params.hash = "SHA256";
+    params.device_cipher = "aes-cbc-essiv:sha256";
+    params.superblock_cipher = "AES256";
+    params.salt = nonce(16);
+
+    std::string doc = static_doc;
+    doc += "\n\nAvaliable hash algorithms:";
+    for (auto algo : hash_functions())
+      doc += ' ' + algo;
+    doc += "\nSome hash algorithms might not be secure.";
+    doc += "\n\nAvaliable ciphers for encrypting partition headers:";
+    for (auto algo : block_ciphers())
+      doc += ' ' + algo;
+    doc += "\nSome ciphers might not be secure.";
+
+    argp argp = {options, parse_opt, "DEVICE", doc.c_str(), nullptr, nullptr,
+      nullptr};
+    argp_parse(&argp, argc, argv, 0, nullptr, &params);
+
+    Hash hash(params.hash);
+
+    params.iters = PBKDF2::benchmark(hash, params.iters);
+    params.iters /= (params.key_size + hash.size()-1)/hash.size();
+
     params.store(device);
+
+    return 0;
   } catch(const std::exception& e) {
-    std::cerr << "Device " << argv[optind] << " doesn't exist or access ";
-    std::cerr << "denied." << std::endl;
+    std::cerr << "Error: " << e.what() << std::endl;
     return 1;
   }
-  
-  return 0;
-}

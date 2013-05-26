@@ -1,7 +1,6 @@
 #include "header.h"
 #include "crypto.h"
 #include "PBKDF2.h"
-#include <gcrypt.h>
 
 void Params::store(BlockDevice& device) {
   device.seek(0);
@@ -81,11 +80,11 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
     std::string hash_max(_hash.size(), '\xFF');
     if ((error = gcry_mpi_scan(&divisor, GCRYMPI_FMT_USG,
             hash_max.data(), hash_max.size(), nullptr)) != GPG_ERR_NO_ERROR)
-      throw std::system_error(error, gpg_category());
+      throw std::system_error(gcrypt_error_code(error), gpg_category());
     blocks = htobe64(blocks-1);
     if ((error = gcry_mpi_scan(&L, GCRYMPI_FMT_USG,
             &blocks, 8, nullptr)) != GPG_ERR_NO_ERROR)
-      throw std::system_error(error, gpg_category());
+      throw std::system_error(gcrypt_error_code(error), gpg_category());
     gcry_mpi_div(divisor, nullptr, divisor, L, 0);
   }
 
@@ -95,7 +94,7 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
     std::string key = PBKDF2::F(_hash, passphrase, salt, iters, i);
     if ((error = gcry_mpi_scan(&x, GCRYMPI_FMT_USG,
             key.data(), key.size(), nullptr)) != GPG_ERR_NO_ERROR)
-      throw std::system_error(error, gpg_category());
+      throw std::system_error(gcrypt_error_code(error), gpg_category());
     gcry_mpi_div(x, nullptr, x, divisor, 0);
   } while (gcry_mpi_cmp(x, L) >= 0);
 
@@ -103,7 +102,7 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
   std::size_t written = 0;
   if ((error = gcry_mpi_print(GCRYMPI_FMT_USG, buf, 8, &written, x))
         != GPG_ERR_NO_ERROR)
-    throw std::system_error(error, gpg_category());
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
 
   std::uint64_t ret = 0;
   std::size_t offset = 0;

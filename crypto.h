@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <cassert>
+
 class Hash {
  public:
   explicit Hash(int algo = 0);
