@@ -14,6 +14,8 @@ void Params::store(BlockDevice& device) {
   device.write(htole32_str(key_size));
   device.write(htole32_str(device_cipher.size()));
   device.write(device_cipher);
+  device.write(htole32_str(superblock_cipher.size()));
+  device.write(superblock_cipher);
   device.write(htole32_str(hash.size()));
   device.write(hash.data());
   device.write(htole32_str(salt.size()));
@@ -53,12 +55,21 @@ void Params::load(BlockDevice& device) {
   key_size = read_uint_le32(device, bytes, "key size");
 
   {  // dm-crypt cipher    
-    std::size_t cipher_size = read_uint_le32(device, bytes, "device cipher size");
+    std::size_t cipher_size = read_uint_le32(device, bytes,
+        "device cipher size");
     device_cipher = read_bytes(device, cipher_size, bytes, "device cipher");
+  }
+
+  {  // libgcrypt cipher
+    std::size_t cipher_size = read_uint_le32(device, bytes,
+        "superblock cipher size");
+    superblock_cipher = read_bytes(device, cipher_size, bytes,
+        "superblock cipher");
   }
   
   {  // hash function
-    std::size_t hash_size = read_uint_le32(device, bytes, "hash function size");
+    std::size_t hash_size = read_uint_le32(device, bytes,
+        "hash function size");
     hash = read_bytes(device, hash_size, bytes, "hash function");
   }
 
@@ -72,7 +83,7 @@ void Params::load(BlockDevice& device) {
 }
 
 std::uint64_t Params::locate_superblock(const std::string& passphrase,
-    std::uint64_t blocks) {
+    std::uint64_t blocks) const {
   Hash _hash(hash);
   gpg_error_t error;
   gcry_mpi_t x = nullptr, divisor, L;
@@ -113,3 +124,71 @@ std::uint64_t Params::locate_superblock(const std::string& passphrase,
 
   return ret+1;
 }
+
+Superblock::Superblock(const Params& _params, const std::string& passphrase,
+    std::uint64_t _blocks)
+    : params(_params), cipher(_params.superblock_cipher) {
+  blocks.push_back(params.locate_superblock(passphrase, _blocks));
+  Hash hash(params.hash);
+  std::string key_iv = PBKDF2::PBKDF2(hash, passphrase, params.salt,
+      params.iters, cipher.key_size()+cipher.block_size());
+  cipher.set_key(key_iv.substr(0, cipher.key_size()));
+  cipher.set_iv(key_iv.substr(cipher.key_size()));
+}
+
+void Superblock::store(BlockDevice& dev) {
+  Hash hash(params.hash);
+  std::string superblock;
+  // Superblock format (everything is 8-byte aligned):
+  //   hash of data in partition header
+  //   number of blocks as a 64-bit little endian integer
+  //   list of blocks as an array of 64-bit little endian integers
+  superblock.reserve(8 + 8*(blocks.size()-1));
+  superblock += htole64_str(blocks.size()-1);
+  for (auto block = blocks.begin()+1; block != blocks.end(); block++)
+    superblock += htole64_str(*block);
+  hash.update(superblock.substr(0, params.block_size - ((hash.size()+7)/8)*8));
+  dev.seek(blocks.front()*params.block_size);
+  dev.write(hash.digest());
+  dev.write(std::string(((hash.size()+7)/8)*8 - hash.size(), 0));
+  dev.write(htole64_str(blocks.size()-1));
+  dev.write(superblock.substr(0, params.block_size-((hash.size()+7)/8)*8-8));
+  std::size_t offset = params.block_size-((hash.size()+7)/8)*8-8;
+  for (auto block = blocks.begin()+1; offset < superblock.size(); block++) {
+    dev.seek((*block)*params.block_size);
+    dev.write(superblock.substr(offset, params.block_size));
+    offset += params.block_size;
+  }
+}
+
+void Superblock::load(BlockDevice& dev) {
+  Hash hash(params.hash);
+  dev.seek(blocks.front()*params.block_size);
+  std::string superblock = dev.read(params.block_size);
+  hash.update(superblock.substr(((hash.size()+7)/8)*8,
+        params.block_size-((hash.size()+7)/8)*8));
+  if (hash.digest() != superblock.substr(0, hash.size()))
+    throw std::runtime_error("Checksum error");
+  blocks.resize(1);
+  std::uint64_t block_count =
+    le64toh_str(superblock.substr(((hash.size()+7)/8)*8, 8));
+  blocks.reserve(block_count + 1);
+  auto current_block = blocks.begin();
+  std::size_t offset = ((hash.size()+7)/8+1)*8;
+  for (std::size_t i = params.block_size/8 - (hash.size()+7)/8 - 1;
+      i != 0 && block_count > 0; i--, block_count--) {
+    blocks.push_back(le64toh_str(superblock.substr(offset, 8)));
+    offset += 8;
+  }
+  while(block_count > 0) {
+    current_block++;
+    dev.seek((*current_block)*params.block_size);
+    superblock += dev.read(params.block_size);
+    for (std::size_t i = 0; i < params.block_size/8 && block_count != 0;
+        i++, block_count--) {
+      blocks.push_back(le64toh_str(superblock.substr(offset, 8)));
+      offset += 8;
+    }
+  }
+}
+

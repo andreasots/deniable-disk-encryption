@@ -16,8 +16,6 @@ namespace {
 
 Hash::Hash(int algo) {
   gpg_error_t error;
-  if ((error = gcry_md_test_algo(algo)) != GPG_ERR_NO_ERROR)
-    throw std::system_error(gcrypt_error_code(error), gpg_category());
   if ((error = gcry_md_open(&_handle, algo, 0)) != GPG_ERR_NO_ERROR)
     throw std::system_error(gcrypt_error_code(error), gpg_category());
 }
@@ -79,6 +77,86 @@ void Hash::update(const std::string& data) {
 std::string Hash::digest() {
   gcry_md_final(_handle);
   return std::string(reinterpret_cast<char*>(gcry_md_read(_handle, 0)), size());
+}
+
+Symmetric::Symmetric(int algo)
+    : _algo(algo) {
+  gpg_error_t error;
+  if ((error = gcry_cipher_open(&_handle, algo, GCRY_CIPHER_MODE_CBC, 0))
+      != GPG_ERR_NO_ERROR)
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+}
+
+Symmetric::Symmetric(const std::string& name)
+    : Symmetric(gcry_cipher_map_name(name.c_str())) {
+}
+
+Symmetric::Symmetric(Symmetric&& cipher)
+    : _handle(cipher._handle) {
+  cipher._handle = nullptr;
+}
+
+Symmetric::~Symmetric() {
+  gcry_cipher_close(_handle);
+}
+
+Symmetric& Symmetric::operator=(Symmetric&& cipher) {
+  std::swap(_handle, cipher._handle);
+  return *this;
+}
+
+std::size_t Symmetric::key_size() {
+  return gcry_cipher_get_algo_keylen(_algo);
+}
+
+std::size_t Symmetric::block_size() {
+  return gcry_cipher_get_algo_blklen(_algo);
+}
+
+void Symmetric::set_key(const std::string& key) {
+  gpg_error_t error;
+  if ((error = gcry_cipher_setkey(_handle, key.data(), key.size()))
+      != GPG_ERR_NO_ERROR)
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+}
+
+void Symmetric::set_iv(const std::string& iv) {
+  gpg_error_t error;
+  if ((error = gcry_cipher_setiv(_handle, iv.data(), iv.size()))
+      != GPG_ERR_NO_ERROR)
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+}
+
+void Symmetric::reset() {
+  gpg_error_t error;
+  if ((error = gcry_cipher_reset(_handle)) != GPG_ERR_NO_ERROR)
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+}
+
+std::string Symmetric::encrypt(const std::string& data) {
+  gpg_error_t error;
+  char *buf = new char[data.size()];
+  if ((error = gcry_cipher_encrypt(_handle, buf, data.size(), data.data(),
+          data.size())) != GPG_ERR_NO_ERROR) {
+    delete[] buf;
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+  }
+  std::string ret(buf, data.size());
+  delete[] buf;
+  return ret;
+}
+
+std::string Symmetric::decrypt(const std::string& data) {
+  gpg_error_t error;
+  char *buf = new char[data.size()];
+  if ((error = gcry_cipher_decrypt(_handle, buf, data.size(), data.data(),
+          data.size())) != GPG_ERR_NO_ERROR) {
+    delete[] buf;
+    throw std::system_error(gcrypt_error_code(error), gpg_category());
+  }
+  std::string ret(buf, data.size());
+  delete[] buf;
+  return ret;
 }
 
 std::vector<std::string> hash_functions() {

@@ -29,35 +29,45 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
   return 0;
 }
 
-int main(int argc, char *argv[]) {
-  BlockDevice device;
-
-  argp argp = {nullptr, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
-  argp_parse(&argp, argc, argv, 0, nullptr, &device);
-
-  Params params;
+int main(int argc, char *argv[])
   try {
-    params.load(device);
+    BlockDevice device;
+
+    argp argp = {nullptr, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
+    argp_parse(&argp, argc, argv, 0, nullptr, &device);
+
+    Params params;
+
+    try {
+      params.load(device);
+    } catch(const std::exception& e) {
+      std::cerr << "Error: Header corrupt." << std::endl;
+      return 1;
+    }
+    std::uint64_t blocks = device.size()/params.block_size;
+
+    if (blocks <= 1) {
+      std::cerr << "Error: No room for any partitions." << std::endl;
+      return 1;
+    }
+    
+    std::string passphrase;
+    Pinentry pinentry;
+    pinentry.SETDESC("Enter passphrases for all partitions on this volume. "
+        "Enter an empty passphrase after last passphrase.");
+    pinentry.SETPROMPT("Passphrase:");
+    while ((passphrase = pinentry.GETPIN()) != "") {
+      Superblock superblock(params, passphrase, blocks);
+      std::cout << superblock.blocks.front() << std::endl;
+      try {
+        superblock.load(device);
+      } catch(...) {
+        pinentry.SETERROR("No partition found for that passphrase.");
+      }
+    } while (passphrase != "");
+    
+    return 0;
   } catch(const std::exception& e) {
-    std::cerr << "Error: Header corrupt." << std::endl;
+    std::cerr << "Error: " << e.what() << std::endl;
     return 1;
   }
-  std::uint64_t blocks = device.size()/params.block_size;
-  
-  if (blocks <= 1) {
-    std::cerr << "No room for any partitions." << std::endl;
-    return 1;
-  }
-
-  std::string passphrase;
-  Pinentry pinentry;
-  pinentry.SETDESC("Enter passphrases for all partitions on this volume. "
-      "Enter an empty passphrase after last passphrase.");
-  pinentry.SETPROMPT("Passphrase:");
-  do {
-    passphrase = pinentry.GETPIN();
-    std::cout << params.locate_superblock(passphrase, blocks) << std::endl;
-  } while (passphrase != "");
-
-  return 0;
-}

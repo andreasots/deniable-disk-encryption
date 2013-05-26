@@ -9,7 +9,7 @@
 
 class Hash {
  public:
-  explicit Hash(int algo = 0);
+  explicit Hash(int algo);
   explicit Hash(const std::string& name);
   Hash(const Hash&);
   Hash(Hash&&);
@@ -30,6 +30,28 @@ class Hash {
 };
 
 class Symmetric {
+ public:
+  explicit Symmetric(int algo);
+  explicit Symmetric(const std::string& name);
+  Symmetric(const Symmetric&) = delete;
+  Symmetric(Symmetric&&);
+  ~Symmetric();
+  Symmetric& operator=(const Symmetric&) = delete;
+  Symmetric& operator=(Symmetric&&);
+
+  std::size_t key_size();
+  std::size_t block_size();
+
+  void set_key(const std::string&);
+  void set_iv(const std::string&);
+
+  void reset();
+  std::string encrypt(const std::string&);
+  std::string decrypt(const std::string&);
+
+ private:
+  gcry_cipher_hd_t _handle;
+  int _algo;
 };
 
 static inline std::string nonce(std::size_t n) {

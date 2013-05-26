@@ -4,6 +4,7 @@
 #define HEADER_MAGIC_STR "\x7c\x32\xc7\x8d"
 
 #include "util.h"
+#include "crypto.h"
 #include "blockdevice.h"
 #include <fstream>
 #include <stdexcept>
@@ -18,18 +19,19 @@ struct Params {
   void store(BlockDevice& dev);
   void load(BlockDevice& dev);
   std::uint64_t locate_superblock(const std::string& passphrase,
-      std::uint64_t blocks);
+      std::uint64_t blocks) const;
 };
 
 struct Superblock {
   std::vector<std::uint64_t> blocks;
-  const Params& param;
-  const std::string key, iv;
+  std::size_t offset = 1;
+  const Params& params;
+  Symmetric cipher;
 
-  Superblock(const Params&, const std::string& passphrase);
+  Superblock(const Params&, const std::string&, std::uint64_t);
 
-  void store(std::ostream& dev);
-  void load(std::istream& dev);
+  void store(BlockDevice& dev);
+  void load(BlockDevice& dev);
 };
 
 #endif  // HEADER_H_
