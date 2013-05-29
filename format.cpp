@@ -1,3 +1,4 @@
+#include "argp-parsers.h"
 #include "PBKDF2.h"
 #include "crypto.h"
 #include "header.h"
@@ -6,22 +7,6 @@
 #include <argp.h>
 #include <iostream>
 #include "blockdevice.h"
-#include <sstream>
-#include <stdexcept>
-#include <chrono>
-
-argp_option options[] = {
-  {"block-size", 'b', "BYTES", 0, "Block size in bytes", 0},
-  {"disk-cipher", 'c', "CIPHER", 0,
-    "Cipher to use to encrypt the DEVICE (see /proc/crypto)", 0},
-  {"header-cipher", 'C', "CIPHER", 0,
-    "Cipher to use to encrypt partition headers", 0},
-  {"hash", 'H', "HASH", 0,
-    "Hash algorithm to use to generate partition keys from passphrases", 0},
-  {"iter-time", 'i', "MS", 0, "PBKDF2 iteration time in milliseconds", 0},
-  {"key-size", 's', "BITS", 0, "Disk encryption key size", 0},
-  {nullptr, 0, nullptr, 0, nullptr, 0}
-};
 
 const char* static_doc = "Create an encrypted volume on DEVICE\v\
 Default block size: 4194304 bytes or 4 MiB\n\
@@ -31,73 +16,30 @@ Default header cipher: AES256\n\
 Default hash algorithm: SHA256\n\
 Default PBKDF2 iteration time: 1000 ms or one second";
 
+struct State {
+  Params params;
+  BlockDevice device;
+};
 
-template <class T> T from_string(const std::string& str) {
-  T ret;
-  std::stringstream(str) >> ret;
-  return ret;
-}
-
-BlockDevice device;
-
-error_t parse_opt(int key, char *arg, struct argp_state *state) {
-  Params *params = reinterpret_cast<Params*>(state->input);
-  switch(key) {
-    case 'b':
-      params->block_size = std::max(from_string<int>(arg), 0);
-      if (params->block_size == 0)
-        argp_failure(state, 1, 0, "Block size must be a positive integer");
-      if (params->block_size % 512)
-        argp_failure(state, 1, 0, "Block size must be a multiple of 512 bytes");
-      break;
-    case 'c':
-      params->device_cipher = arg;
-      break;
-    case 'C':
-      params->superblock_cipher = arg;
-      break;
-    case 'H':
-      params->hash = arg;
-      break;
-    case 'i':
-      params->iters = std::max(from_string<int>(arg), 0);
-      if (params->iters == 0)
-        argp_failure(state, 1, 0, "Iteration time must be a positive integer");
-      break;
-    case 's':
-      params->key_size = std::max(from_string<int>(arg), 0);
-      if (params->key_size == 0 || params->key_size % 8 != 0) 
-        argp_failure(state, 1, 0, "Key size must be a multiple of 8 bits");
-      break;
-    case ARGP_KEY_ARG:
-      if (device.open())
-        argp_failure(state, 1, 0, "Too many arguments");
-      try {
-        device = BlockDevice(arg);
-      } catch(const std::exception& e) {
-        argp_failure(state, 1, 0, e.what());
-      }
-      break;
-    case ARGP_KEY_END:
-      if (!device.open())
-        argp_failure(state, 1, 0, "Too few arguments");
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
+error_t init_parsers(int key, char*, argp_state* state) {
+  if (key == ARGP_KEY_INIT) {
+    state->child_inputs[0] = &reinterpret_cast<State*>(state->input)->params;
+    state->child_inputs[1] = &reinterpret_cast<State*>(state->input)->device;
+    return 0;
   }
-  return 0;
+  return ARGP_ERR_UNKNOWN;
 }
 
 int main(int argc, char *argv[])
   try {
-    Params params;
-    params.block_size = 4 << 20;
-    params.iters = 1000;
-    params.key_size = 256/8;
-    params.hash = "SHA256";
-    params.device_cipher = "aes-cbc-essiv:sha256";
-    params.superblock_cipher = "AES256";
-    params.salt = nonce(16);
+    State state;
+    state.params.block_size = 4 << 20;
+    state.params.iters = 1000;
+    state.params.key_size = 256/8;
+    state.params.hash = "SHA256";
+    state.params.device_cipher = "aes-cbc-essiv:sha256";
+    state.params.superblock_cipher = "AES256";
+    state.params.salt = nonce(16);
 
     std::string doc = static_doc;
     doc += "\n\nAvaliable hash algorithms:";
@@ -109,16 +51,18 @@ int main(int argc, char *argv[])
       doc += ' ' + algo;
     doc += "\nSome ciphers might not be secure.";
 
-    argp argp = {options, parse_opt, "DEVICE", doc.c_str(), nullptr, nullptr,
-      nullptr};
-    argp_parse(&argp, argc, argv, 0, nullptr, &params);
+    auto parsers = new_subparser({"params", "device"});
 
-    Hash hash(params.hash);
+    argp argp = {nullptr, init_parsers, nullptr, doc.c_str(), parsers.get(),
+      nullptr, nullptr};
+    argp_parse(&argp, argc, argv, 0, nullptr, &state);
 
-    params.iters = PBKDF2::benchmark(hash, params.iters);
-    params.iters /= (params.key_size + hash.size()-1)/hash.size();
+    Hash hash(state.params.hash);
 
-    params.store(device);
+    state.params.iters = PBKDF2::benchmark(hash, state.params.iters);
+    state.params.iters /= (state.params.key_size + hash.size()-1)/hash.size();
+
+    state.params.store(state.device);
 
     return 0;
   } catch(const std::exception& e) {

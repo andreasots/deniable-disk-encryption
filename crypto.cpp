@@ -10,6 +10,8 @@ namespace {
         std::cerr << "libgcrypt version mismatch" << std::endl;
         std::exit(2);
       }
+      gcry_control(GCRYCTL_DISABLE_SECMEM, 0);
+      gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
     }
   } libgcrypt;
 }

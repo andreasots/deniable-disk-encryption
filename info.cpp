@@ -1,5 +1,6 @@
 #include "blockdevice.h"
 #include "header.h"
+#include "argp-parsers.h"
 #include <argp.h>
 #include <iostream>
 #include <cstdlib>
@@ -7,32 +8,20 @@
 
 const char* doc = "View parameter area on DEVICE";
 
-error_t parse_opt(int key, char *arg, struct argp_state *state) {
-  BlockDevice &device = *reinterpret_cast<BlockDevice*>(state->input);
-  switch (key) {
-    case ARGP_KEY_ARG:
-      if (device.open())
-        argp_failure(state, 1, 0, "Too many arguments");
-      try {
-        device = BlockDevice(arg);
-      } catch(const std::exception& e) {
-        argp_failure(state, 1, 0, e.what());
-      }
-      break;
-    case ARGP_KEY_END:
-      if (!device.open())
-        argp_failure(state, 1, 0, "Too few arguments");
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
+error_t init_parsers(int key, char*, argp_state* state) {
+  if (key == ARGP_KEY_INIT) {
+    state->child_inputs[0] = state->input;
+    return 0;
   }
-  return 0;
+  return ARGP_ERR_UNKNOWN;
 }
 
 int main(int argc, char *argv[]) {
   BlockDevice device;
 
-  argp argp = {nullptr, parse_opt, "DEVICE", doc, nullptr, nullptr, nullptr};
+  auto parsers = new_subparser({"device"});
+  argp argp = {nullptr, init_parsers, nullptr, doc, parsers.get(), nullptr,
+    nullptr};
   argp_parse(&argp, argc, argv, 0, nullptr, &device);
   
   Params params;
@@ -57,6 +46,8 @@ int main(int argc, char *argv[]) {
   std::cout << "Key size: " << params.key_size*8 << " bits" << std::endl;
   std::cout << "Hash algorithm: " << params.hash << std::endl;
   std::cout << "Encryption algorithm: " << params.device_cipher << std::endl;
+  std::cout << "Superblock encryption algorithm: " << params.superblock_cipher
+    << std::endl;
   
   return 0;
 }
