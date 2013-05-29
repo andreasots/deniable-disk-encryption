@@ -210,3 +210,11 @@ void Superblock::load(BlockDevice& dev) {
       blocks.push_back(le64toh_str(chunk.substr(read, 8)));
   }
 }
+
+std::uint64_t Superblock::size_in_blocks(const Params& params,
+    std::uint64_t blocks) {
+  auto hash_size = Hash(params.hash).size();
+  auto checksum_size = (hash_size+7)/8*8;
+  auto blocks_per_chunk = (params.block_size-checksum_size)/8;
+  return (blocks+blocks_per_chunk)/blocks_per_chunk;
+}

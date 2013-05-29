@@ -1,10 +1,10 @@
 #include "argp-parsers.h"
 #include "blockdevice.h"
 #include "header.h"
-#include <sstream>
+#include "util.h"
 
 argp_option params_options[] = {
-  {"block-size", 'b', "BYTES", 1, "Block size in bytes", 0},
+  {"block-size", 'b', "BYTES", 0, "Block size in bytes", 0},
   {"disk-cipher", 'c', "CIPHER", 0,
     "Cipher to use to encrypt the DEVICE (see /proc/crypto)", 0},
   {"header-cipher", 'C', "CIPHER", 0,
@@ -17,7 +17,7 @@ argp_option params_options[] = {
 };
 
 error_t parse_device(int key, char *arg, struct argp_state *state) {
-  BlockDevice &device = *reinterpret_cast<BlockDevice*>(state->input);
+  BlockDevice& device = *reinterpret_cast<BlockDevice*>(state->input);
   switch (key) {
     case ARGP_KEY_ARG:
       if (device.open())
@@ -38,14 +38,8 @@ error_t parse_device(int key, char *arg, struct argp_state *state) {
   return 0;
 }
 
-template <class T> T from_string(const std::string& str) {
-  T ret;
-  std::stringstream(str) >> ret;
-  return ret;
-}
-
 error_t parse_params(int key, char *arg, struct argp_state *state) {
-  Params &params = *reinterpret_cast<Params*>(state->input);
+  Params& params = *reinterpret_cast<Params*>(state->input);
   switch(key) {
     case 'b':
       params.block_size = std::max(from_string<int>(arg), 0);

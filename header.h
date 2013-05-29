@@ -32,6 +32,9 @@ struct Superblock {
 
   void store(BlockDevice& dev);
   void load(BlockDevice& dev);
+
+  static std::uint64_t size_in_blocks(const Params& params,
+      std::uint64_t blocks);
 };
 
 #endif  // HEADER_H_

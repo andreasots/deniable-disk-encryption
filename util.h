@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <system_error>
+#include <sstream>
 #include <gpg-error.h>
 
 class gpg_category : public std::error_category {
@@ -20,6 +21,12 @@ class gpg_category : public std::error_category {
 // gcrypt has a bug that sets the error source to GPG_ERR_SOURCE_USER_1
 static inline gpg_error_t gcrypt_error_code(gpg_error_t code) {
   return gpg_err_make(GPG_ERR_SOURCE_GCRYPT, gpg_err_code(code));
+}
+
+template <class T> T from_string(const std::string& str) {
+  T ret;
+  std::stringstream(str) >> ret;
+  return ret;
 }
 
 static inline std::string htole32_str(std::uint32_t i) {
