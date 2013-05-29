@@ -1,6 +1,7 @@
 #include "header.h"
 #include "crypto.h"
 #include "PBKDF2.h"
+#include <algorithm>
 
 void Params::store(BlockDevice& device) {
   device.seek(0);
@@ -137,58 +138,31 @@ Superblock::Superblock(const Params& _params, const std::string& passphrase,
 }
 
 void Superblock::store(BlockDevice& dev) {
-  Hash hash(params.hash);
   std::string superblock;
-  // Superblock format (everything is 8-byte aligned):
-  //   hash of data in partition header
-  //   number of blocks as a 64-bit little endian integer
-  //   list of blocks as an array of 64-bit little endian integers
-  superblock.reserve(8 + 8*(blocks.size()-1));
-  superblock += htole64_str(blocks.size()-1);
-  for (auto block = blocks.begin()+1; block != blocks.end(); block++)
+  superblock.reserve(blocks.size()*8);
+  superblock += htole64_str(blocks.size());
+  for (auto block = blocks.begin()+1; block != blocks.end(); ++block)
     superblock += htole64_str(*block);
-  hash.update(superblock.substr(0, params.block_size - ((hash.size()+7)/8)*8));
-  dev.seek(blocks.front()*params.block_size);
-  dev.write(hash.digest());
-  dev.write(std::string(((hash.size()+7)/8)*8 - hash.size(), 0));
-  dev.write(htole64_str(blocks.size()-1));
-  dev.write(superblock.substr(0, params.block_size-((hash.size()+7)/8)*8-8));
-  std::size_t offset = params.block_size-((hash.size()+7)/8)*8-8;
-  for (auto block = blocks.begin()+1; offset < superblock.size(); block++) {
+
+  Hash hash(params.hash);
+  std::size_t checksum_size = (hash.size()+7)/8*8;
+  std::size_t written = 0;
+  offset = 0;
+  for (auto block = blocks.begin();
+      written < superblock.size();
+      written += params.block_size, ++block, ++offset) {
+    std::string chunk = std::string(hash.size(), '\x00') +
+      nonce(params.block_size-hash.size());
+    std::string data = superblock.substr(written,
+        params.block_size-checksum_size);
+    std::copy(data.begin(), data.end(), chunk.begin()+checksum_size);
+    hash.update(chunk);
+    std::copy_n(hash.digest().begin(), hash.size(), chunk.begin());
+    hash.reset();
     dev.seek((*block)*params.block_size);
-    dev.write(superblock.substr(offset, params.block_size));
-    offset += params.block_size;
+    dev.write(chunk);
   }
 }
 
 void Superblock::load(BlockDevice& dev) {
-  Hash hash(params.hash);
-  dev.seek(blocks.front()*params.block_size);
-  std::string superblock = dev.read(params.block_size);
-  hash.update(superblock.substr(((hash.size()+7)/8)*8,
-        params.block_size-((hash.size()+7)/8)*8));
-  if (hash.digest() != superblock.substr(0, hash.size()))
-    throw std::runtime_error("Checksum error");
-  blocks.resize(1);
-  std::uint64_t block_count =
-    le64toh_str(superblock.substr(((hash.size()+7)/8)*8, 8));
-  blocks.reserve(block_count + 1);
-  auto current_block = blocks.begin();
-  std::size_t offset = ((hash.size()+7)/8+1)*8;
-  for (std::size_t i = params.block_size/8 - (hash.size()+7)/8 - 1;
-      i != 0 && block_count > 0; i--, block_count--) {
-    blocks.push_back(le64toh_str(superblock.substr(offset, 8)));
-    offset += 8;
-  }
-  while(block_count > 0) {
-    current_block++;
-    dev.seek((*current_block)*params.block_size);
-    superblock += dev.read(params.block_size);
-    for (std::size_t i = 0; i < params.block_size/8 && block_count != 0;
-        i++, block_count--) {
-      blocks.push_back(le64toh_str(superblock.substr(offset, 8)));
-      offset += 8;
-    }
-  }
 }
-

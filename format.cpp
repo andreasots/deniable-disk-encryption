@@ -45,8 +45,10 @@ error_t parse_opt(int key, char *arg, struct argp_state *state) {
   switch(key) {
     case 'b':
       params->block_size = std::max(from_string<int>(arg), 0);
-      if (params->block_size < 512)
-        argp_failure(state, 1, 0, "Block size must be at least 512 bytes");
+      if (params->block_size == 0)
+        argp_failure(state, 1, 0, "Block size must be a positive integer");
+      if (params->block_size % 512)
+        argp_failure(state, 1, 0, "Block size must be a multiple of 512 bytes");
       break;
     case 'c':
       params->device_cipher = arg;
