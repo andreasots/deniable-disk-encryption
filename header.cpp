@@ -160,9 +160,13 @@ void Superblock::store(BlockDevice& dev) {
     std::copy_n(hash.digest().begin(), hash.size(), chunk.begin());
     hash.reset();
     dev.seek((*block)*params.block_size);
-    dev.write(chunk);
+    dev.write(cipher.encrypt(chunk));
   }
 }
 
 void Superblock::load(BlockDevice& dev) {
+  // first chunk
+  dev.seek(blocks.front()*params.block_size);
+  std::string chunk = dev.read(params.block_size);
+
 }
