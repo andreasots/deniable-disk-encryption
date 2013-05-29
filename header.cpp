@@ -140,7 +140,7 @@ Superblock::Superblock(const Params& _params, const std::string& passphrase,
 void Superblock::store(BlockDevice& dev) {
   std::string superblock;
   superblock.reserve(blocks.size()*8);
-  superblock += htole64_str(blocks.size());
+  superblock += htole64_str(blocks.size()-1);
   for (auto block = blocks.begin()+1; block != blocks.end(); ++block)
     superblock += htole64_str(*block);
 
@@ -151,6 +151,8 @@ void Superblock::store(BlockDevice& dev) {
   for (auto block = blocks.begin();
       written < superblock.size();
       written += params.block_size, ++block, ++offset) {
+    if (*block == 0)
+      throw std::out_of_range("unmapped block in superblock storage");
     std::string chunk = std::string(hash.size(), '\x00') +
       nonce(params.block_size-hash.size());
     std::string data = superblock.substr(written,
@@ -161,12 +163,50 @@ void Superblock::store(BlockDevice& dev) {
     hash.reset();
     dev.seek((*block)*params.block_size);
     dev.write(cipher.encrypt(chunk));
+    written += params.block_size-checksum_size;
   }
 }
 
 void Superblock::load(BlockDevice& dev) {
+  Hash hash(params.hash);
+  std::size_t checksum_size = (hash.size()+7)/8*8;
   // first chunk
   dev.seek(blocks.front()*params.block_size);
-  std::string chunk = dev.read(params.block_size);
-
+  std::string chunk = cipher.decrypt(dev.read(params.block_size));
+  std::string checksum = chunk.substr(0, hash.size());
+  std::copy_n(std::string(hash.size(), '\x00').begin(), hash.size(), 
+      chunk.begin());
+  hash.update(chunk);
+  if (checksum != hash.digest())
+    throw std::runtime_error("checksum mismatch");
+  hash.reset();
+  std::uint64_t block_count = le64toh_str(chunk.substr(checksum_size, 8));
+  blocks.resize(1);
+  blocks.reserve(block_count+1);
+  auto blocks_per_chunk = (params.block_size-checksum_size)/8;
+  offset = (block_count+blocks_per_chunk-1)/blocks_per_chunk;
+  for (std::size_t read = checksum_size+8;
+      read < chunk.size() && blocks.size()-1 < block_count;
+      read += 8)
+    blocks.push_back(le64toh_str(chunk.substr(read, 8)));
+  // subsequent chunks
+  for (auto block = blocks.begin();
+      std::distance(blocks.begin(), block) < offset;
+      block++) {
+    if (*block == 0)
+      throw std::out_of_range("unmapped block in superblock storage");
+    dev.seek((*block)*params.block_size);
+    chunk = cipher.decrypt(dev.read(params.block_size));
+    checksum = chunk.substr(0, hash.size());
+    std::copy_n(std::string(hash.size(), '\x00').begin(), hash.size(),
+        chunk.begin());
+    hash.update(chunk);
+    if (checksum != hash.digest())
+      throw std::runtime_error("checksum mismatch");
+    hash.reset();
+    for (std::size_t read = checksum_size;
+        read < chunk.size() && blocks.size()-1 < block_count;
+        read += 8)
+      blocks.push_back(le64toh_str(chunk.substr(read, 8)));
+  }
 }
