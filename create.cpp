@@ -5,6 +5,8 @@
 #include <argp.h>
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
+#include <random>
 
 const char* doc = "Create a new encrypted partition on DEVICE";
 
@@ -31,12 +33,13 @@ error_t init_parsers(int key, char* arg, argp_state* state) {
       if (args.blocks == 0)
         argp_failure(state, 1, 0, "Number of blocks must be positive");
       break;
-    case 's':
-      std::uint64_t size = from_string<std::int64_t>(arg);
-      args.partition_size = size;
-      if (size == 0)
-        argp_failure(state, 1, 0, "Partition size must be positive");
-      break;
+    case 's': {
+        auto size = from_string<std::int64_t>(arg);
+        args.partition_size = size;
+        if (size <= 0)
+          argp_failure(state, 1, 0, "Partition size must be positive");
+        break;
+      }
     case ARGP_KEY_INIT:
       state->child_inputs[0] = &args.device;
       break;
@@ -69,10 +72,6 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    if (state.partition_size == 0)
-      state.partition_size =
-        state.blocks-Superblock::size_in_blocks(params, state.blocks);
-
     std::vector<bool> allocated_blocks(blocks);
     allocated_blocks[0] = true;
 
@@ -98,7 +97,50 @@ int main(int argc, char *argv[])
       free_blocks++;
 
     std::cout << free_blocks << " blocks free." << std::endl;
+
+    if (state.blocks == 0)
+      state.blocks = free_blocks;
+    if (state.partition_size == 0) {
+      decltype(state.partition_size) last;
+      state.partition_size = state.blocks;
+      do {
+        last = state.partition_size;
+        state.partition_size = state.blocks-Superblock::size_in_blocks(params,
+          state.partition_size);
+      } while (last != state.partition_size);
+    }
+
+    std::uint64_t blocks_required = state.partition_size+
+      Superblock::size_in_blocks(params, state.partition_size);
+    state.blocks = std::min(state.blocks, blocks_required);
     
+    if (state.blocks > free_blocks) {
+      std::cerr << "Error: not enough free space." << std::endl;
+      return 1;
+    }
+
+    pinentry.SETDESC("Enter passphrase for the new partition.");
+    Superblock new_partition(params, pinentry.GETPIN(), blocks);
+    if (allocated_blocks[new_partition.blocks.front()]) {
+      std::cerr << "Error: superblock location already in use." << std::endl;
+      return 1;
+    }
+    allocated_blocks[new_partition.blocks.front()] = true;
+    state.blocks--;
+
+    std::vector<std::uint64_t> pool(free_blocks-1);
+    for (std::size_t i = 0; i < blocks; i++)
+      if (!allocated_blocks[i])
+        pool.push_back(i);
+
+    std::shuffle(pool.begin(), pool.end(), std::random_device());
+    for (; state.blocks > 0; state.blocks--, state.partition_size--) {
+      new_partition.blocks.push_back(pool.back());
+      pool.pop_back();
+    }
+    for (; state.partition_size > 0; state.partition_size--)
+      new_partition.blocks.push_back(0);
+    new_partition.store(state.device);
     return 0;
   } catch(const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
