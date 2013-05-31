@@ -129,10 +129,11 @@ void Symmetric::set_iv(const std::string& iv) {
     throw std::system_error(gcrypt_error_code(error), gpg_category());
 }
 
-void Symmetric::reset() {
+void Symmetric::reset(const std::string& iv) {
   gpg_error_t error;
   if ((error = gcry_cipher_reset(_handle)) != GPG_ERR_NO_ERROR)
     throw std::system_error(gcrypt_error_code(error), gpg_category());
+  set_iv(iv);
 }
 
 std::string Symmetric::encrypt(const std::string& data) {

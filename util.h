@@ -50,7 +50,7 @@ static inline std::uint32_t le32toh_str(const std::string& str) {
 #endif
 }
 
-static inline std::string htole64_str(std::uint32_t i) {
+static inline std::string htole64_str(std::uint64_t i) {
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   return std::string(reinterpret_cast<char*>(&i), 8);
 #else

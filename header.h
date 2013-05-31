@@ -27,6 +27,7 @@ struct Superblock {
   std::size_t offset = 1;
   const Params& params;
   Symmetric cipher;
+  std::string iv;
 
   Superblock(const Params&, const std::string&, std::uint64_t);
 

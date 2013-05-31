@@ -134,7 +134,8 @@ Superblock::Superblock(const Params& _params, const std::string& passphrase,
   std::string key_iv = PBKDF2::PBKDF2(hash, passphrase, params.salt,
       params.iters, cipher.key_size()+cipher.block_size());
   cipher.set_key(key_iv.substr(0, cipher.key_size()));
-  cipher.set_iv(key_iv.substr(cipher.key_size()));
+  iv = key_iv.substr(cipher.key_size());
+  cipher.set_iv(iv);
 }
 
 void Superblock::store(BlockDevice& dev) {
@@ -162,6 +163,7 @@ void Superblock::store(BlockDevice& dev) {
     std::copy_n(hash.digest().begin(), hash.size(), chunk.begin());
     hash.reset();
     dev.seek((*block)*params.block_size);
+    cipher.reset(iv);
     dev.write(cipher.encrypt(chunk));
     written += params.block_size-checksum_size;
   }
@@ -172,6 +174,7 @@ void Superblock::load(BlockDevice& dev) {
   std::size_t checksum_size = (hash.size()+7)/8*8;
   // first chunk
   dev.seek(blocks.front()*params.block_size);
+  cipher.reset(iv);
   std::string chunk = cipher.decrypt(dev.read(params.block_size));
   std::string checksum = chunk.substr(0, hash.size());
   std::copy_n(std::string(hash.size(), '\x00').begin(), hash.size(), 
@@ -195,6 +198,7 @@ void Superblock::load(BlockDevice& dev) {
       block++) {
     if (*block == 0)
       throw std::out_of_range("unmapped block in superblock storage");
+    cipher.reset(iv);
     dev.seek((*block)*params.block_size);
     chunk = cipher.decrypt(dev.read(params.block_size));
     checksum = chunk.substr(0, hash.size());

@@ -45,7 +45,7 @@ class Symmetric {
   void set_key(const std::string&);
   void set_iv(const std::string&);
 
-  void reset();
+  void reset(const std::string& iv);
   std::string encrypt(const std::string&);
   std::string decrypt(const std::string&);
 

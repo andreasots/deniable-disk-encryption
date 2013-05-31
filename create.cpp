@@ -90,11 +90,12 @@ int main(int argc, char *argv[])
       } catch(...) {
         pinentry.SETERROR("No partition found for that passphrase.");
       }
-    } while (passphrase != "");
+    }
 
     std::size_t free_blocks = 0;
     for (bool allocated : allocated_blocks)
-      free_blocks++;
+      if (!allocated)
+        free_blocks++;
 
     std::cout << free_blocks << " blocks free." << std::endl;
 

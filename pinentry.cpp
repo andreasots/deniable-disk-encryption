@@ -29,10 +29,6 @@ static void nodata_command(assuan_context_t ctx,
 }
 
 Pinentry::~Pinentry() {
-  assuan_transact(_pinentry, "BYE",
-      nullptr, nullptr,
-      nullptr, nullptr,
-      nullptr, nullptr);
   assuan_release(_pinentry);
 }
 
