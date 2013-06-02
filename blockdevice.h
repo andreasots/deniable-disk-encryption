@@ -19,6 +19,8 @@ class BlockDevice {
   BlockDevice& operator=(BlockDevice&&);
 
   bool open() const;
+  unsigned major() const;
+  unsigned minor() const;
 
   std::string read(std::size_t n);
   void write(const std::string&);

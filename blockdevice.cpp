@@ -36,6 +36,20 @@ bool BlockDevice::open() const {
   return _fd != -1;
 }
 
+unsigned BlockDevice::major() const {
+  struct stat info;
+  if (fstat(_fd, &info) == -1)
+    throw std::system_error(errno, std::system_category());
+  return ::major(info.st_rdev);
+}
+
+unsigned BlockDevice::minor() const {
+  struct stat info;
+  if (fstat(_fd, &info) == -1)
+    throw std::system_error(errno, std::system_category());
+  return ::minor(info.st_rdev);
+}
+
 std::string BlockDevice::read(std::size_t n) {
   char *buf = new char[n];
   std::size_t total = 0;
