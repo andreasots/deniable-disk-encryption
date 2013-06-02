@@ -80,27 +80,37 @@ int main(int argc, char *argv[])
     if (state.name.empty()) {
       hash.reset();
       hash.update(key);
-      state.name = hex(hash.digest().substr(8));
+      state.name = hex(hash.digest()).substr(8);
     }
 
-    dm_task* dmt;
-    if (!(dmt = dm_task_create(DM_DEVICE_CREATE)));
-    dm_task_set_name(dmt, state.name.c_str());
-    std::uint64_t offset = 0;
-    for (auto block = superblock.blocks.begin()+superblock.offset;
-        block != superblock.blocks.end(); block++, offset += params.block_size) {
-      if (*block != 0) {
-        std::stringstream ss;
-        ss << params.device_cipher << " " << hex(key) << " 0 ";
-        ss << state.device.major() << ":" << state.device.minor() << " ";
-        ss << (*block)*params.block_size/512;
-        dm_task_add_target(dmt, offset/512, params.block_size/512, "crypt", ss.str().c_str());
-      } else {
-        dm_task_add_target(dmt, offset/512, params.block_size/512, "error", "");
+    {
+      std::unique_ptr<dm_task, void(*)(dm_task*)> dmt(
+          dm_task_create(DM_DEVICE_CREATE), dm_task_destroy);
+      if (!dmt.get())
+        throw std::runtime_error("dm_task_create failed");
+      if (!dm_task_set_name(dmt.get(), state.name.c_str()))
+        throw std::runtime_error("dm_task_set_name failed");
+      std::uint64_t offset = 0;
+      for (auto block = superblock.blocks.begin()+superblock.offset;
+          block != superblock.blocks.end();
+          block++, offset += params.block_size) {
+        if (*block != 0) {
+          std::stringstream ss;
+          ss << params.device_cipher << " " << hex(key) << " 0 ";
+          ss << state.device.major() << ":" << state.device.minor() << " ";
+          ss << (*block)*params.block_size/512;
+          if (!dm_task_add_target(dmt.get(), offset/512, params.block_size/512,
+                "crypt", ss.str().c_str()))
+            throw std::runtime_error("dm_task_add_target(\"crypt\") failed");
+        } else {
+          if (!dm_task_add_target(dmt.get(), offset/512, params.block_size/512,
+                "error", ""))
+            throw std::runtime_error("dm_task_add_target(\"error\") failed");
+        }
       }
+      if (!dm_task_run(dmt.get()))
+        throw std::runtime_error("dm_task_run failed");
     }
-    dm_task_run(dmt);
-    dm_task_destroy(dmt);
 
     return 0;
   } catch(const std::exception& e) {

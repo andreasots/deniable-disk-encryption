@@ -4,9 +4,7 @@
 #include <cstdint>
 #include <string>
 
-// ISO C++ committee made a stupid decision to NOT expose system errors to the
-// application (a generic std::runtime_error("basic_ios::clear") is thrown
-// instead).
+#include <sys/types.h>
 
 class BlockDevice {
  public:

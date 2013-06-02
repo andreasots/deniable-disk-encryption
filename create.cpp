@@ -82,7 +82,6 @@ int main(int argc, char *argv[])
     pinentry.SETPROMPT("Passphrase:");
     while ((passphrase = pinentry.GETPIN()) != "") {
       Superblock superblock(params, passphrase, blocks);
-      std::cout << superblock.blocks.front() << std::endl;
       try {
         superblock.load(state.device);
         for (auto block : superblock.blocks)
@@ -98,6 +97,11 @@ int main(int argc, char *argv[])
         free_blocks++;
 
     std::cout << free_blocks << " blocks free." << std::endl;
+
+    if (free_blocks == 0) {
+      std::cout << "Error: not enough free space." << std::endl;
+      return 1;
+    }
 
     if (state.blocks == 0)
       state.blocks = free_blocks;
@@ -129,11 +133,11 @@ int main(int argc, char *argv[])
     allocated_blocks[new_partition.blocks.front()] = true;
     state.blocks--;
 
-    std::vector<std::uint64_t> pool(free_blocks-1);
+    std::vector<std::uint64_t> pool;
+    pool.reserve(free_blocks-1);
     for (std::size_t i = 0; i < blocks; i++)
       if (!allocated_blocks[i])
         pool.push_back(i);
-
     std::shuffle(pool.begin(), pool.end(), std::random_device());
     for (; state.blocks > 0; state.blocks--, state.partition_size--) {
       new_partition.blocks.push_back(pool.back());
